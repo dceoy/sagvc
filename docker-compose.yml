@@ -1,0 +1,17 @@
+---
+version: '3'
+
+services:
+  sagvc:
+    container_name: sagvc
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dceoy/sagvc:latest
+    user: ${UID}:${GID}
+    userns_mode: host
+    volumes:
+      - .:/wd
+    working_dir: /wd
+    entrypoint:
+      - sagvc
