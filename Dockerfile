@@ -2,8 +2,13 @@ FROM ubuntu:20.04 AS builder
 
 ENV DEBIAN_FRONTEND noninteractive
 
+COPY --from=dceoy/samtools:latest /usr/local/src/samtools /usr/local/src/samtools
+COPY --from=dceoy/bcftools:latest /usr/local/src/bcftools /usr/local/src/bcftools
+COPY --from=dceoy/bedtools:latest /usr/local/src/bedtools2 /usr/local/src/bedtools2
 COPY --from=dceoy/gatk:latest /opt/conda /opt/conda
 COPY --from=dceoy/gatk:latest /opt/gatk /opt/gatk
+COPY --from=dceoy/delly:latest /usr/local/bin/delly /usr/local/bin/delly
+COPY --from=dceoy/msisensor-pro:latest /usr/local/bin/msisensor-pro /usr/local/bin/msisensor-pro
 ADD https://bootstrap.pypa.io/get-pip.py /tmp/get-pip.py
 ADD . /tmp/sagvc
 
@@ -26,7 +31,13 @@ RUN set -e \
       && source /opt/gatk/gatkenv.rc \
       && /opt/conda/bin/conda update -n base -c defaults conda \
       && /opt/conda/bin/python3 /tmp/get-pip.py \
-      && /opt/conda/bin/python3 -m pip install -U --no-cache-dir /tmp/sagvc \
+      && /opt/conda/bin/python3 -m pip install -U --no-cache-dir \
+        cnvkit cutadapt https://github.com/dceoy/ftarc/archive/main.tar.gz \
+        https://github.com/dceoy/vanqc/archive/main.tar.gz /tmp/vcline \
+      && cp /opt/gatk/gatkcondaenv.yml /tmp/gatkcondaenv.yml \
+      && echo -e '- bioconductor-dnacopy' >> /tmp/gatkcondaenv.yml \
+      && /opt/conda/bin/conda update -n gatk -f /tmp/gatkcondaenv.yml \
+      && source deactivate \
       && /opt/conda/bin/conda clean -yaf \
       && find /opt/conda -follow -type f -name '*.a' -delete \
       && find /opt/conda -follow -type f -name '*.pyc' -delete \
@@ -42,7 +53,24 @@ RUN set -e \
       && make clean \
       && ./configure \
       && make \
-      && make install
+      && make install \
+      && cd /usr/local/src/bcftools/htslib-* \
+      && make clean \
+      && ./configure \
+      && make \
+      && cd /usr/local/src/bcftools \
+      && make clean \
+      && ./configure --enable-libgsl --enable-perl-filters \
+      && make \
+      && make install \
+      && cd /usr/local/src/bedtools2 \
+      && make clean \
+      && make \
+      && make install \
+      && find \
+        /usr/local/src/FastQC /usr/local/src/TrimGalore -maxdepth 1 -type f \
+        -executable -exec ln -s {} /usr/local/bin \;
+
 
 FROM ubuntu:20.04
 
