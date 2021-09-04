@@ -19,8 +19,8 @@ RUN set -e \
       && apt-get -y update \
       && apt-get -y dist-upgrade \
       && apt-get -y install --no-install-recommends --no-install-suggests \
-        gcc libbz2-dev libcurl4-gnutls-dev liblzma-dev libncurses5-dev \
-        libssl-dev libz-dev make pkg-config \
+        g++ gcc libbz2-dev libcurl4-gnutls-dev libgsl-dev liblzma-dev \
+        libncurses5-dev libperl-dev libssl-dev libz-dev make perl pkg-config \
       && apt-get -y autoremove \
       && apt-get clean \
       && rm -rf /var/lib/apt/lists/*
@@ -28,16 +28,15 @@ RUN set -e \
 ENV PATH /opt/gatk/bin:/opt/conda/envs/gatk/bin:/opt/conda/bin:${PATH}
 
 RUN set -e \
-      && source /opt/gatk/gatkenv.rc \
-      && /opt/conda/bin/conda update -n base -c defaults conda \
       && /opt/conda/bin/python3 /tmp/get-pip.py \
       && /opt/conda/bin/python3 -m pip install -U --no-cache-dir \
         cnvkit cutadapt https://github.com/dceoy/ftarc/archive/main.tar.gz \
-        https://github.com/dceoy/vanqc/archive/main.tar.gz /tmp/vcline \
-      && cp /opt/gatk/gatkcondaenv.yml /tmp/gatkcondaenv.yml \
-      && echo -e '- bioconductor-dnacopy' >> /tmp/gatkcondaenv.yml \
-      && /opt/conda/bin/conda update -n gatk -f /tmp/gatkcondaenv.yml \
-      && source deactivate \
+        https://github.com/dceoy/vanqc/archive/main.tar.gz /tmp/sagvc \
+      && /opt/conda/bin/conda update -n base -c defaults conda \
+      && echo >> /opt/gatk/gatkcondaenv.yml \
+      && echo -e '# CNVkit' >> /opt/gatk/gatkcondaenv.yml \
+      && echo -e '- bioconductor-dnacopy' >> /opt/gatk/gatkcondaenv.yml \
+      && /opt/conda/bin/conda env update -n gatk -f /opt/gatk/gatkcondaenv.yml \
       && /opt/conda/bin/conda clean -yaf \
       && find /opt/conda -follow -type f -name '*.a' -delete \
       && find /opt/conda -follow -type f -name '*.pyc' -delete \
@@ -66,10 +65,7 @@ RUN set -e \
       && cd /usr/local/src/bedtools2 \
       && make clean \
       && make \
-      && make install \
-      && find \
-        /usr/local/src/FastQC /usr/local/src/TrimGalore -maxdepth 1 -type f \
-        -executable -exec ln -s {} /usr/local/bin \;
+      && make install
 
 
 FROM ubuntu:20.04
@@ -89,8 +85,10 @@ RUN set -e \
       && apt-get -y update \
       && apt-get -y dist-upgrade \
       && apt-get -y install --no-install-recommends --no-install-suggests \
-        apt-transport-https apt-utils ca-certificates curl gnupg \
-        libcurl3-gnutls libgsl23 libgkl-jni libncurses5 openjdk-8-jre wget
+        apt-transport-https apt-utils ca-certificates curl gnupg gnuplot \
+        libcurl3-gnutls libgsl23 libgkl-jni libncurses5 openjdk-8-jre \
+        texlive-fonts-extra texlive-fonts-recommended texlive-latex-base \
+        texlive-latex-extra wget
 
 RUN set -eo pipefail \
       && echo 'deb http://packages.cloud.google.com/apt cloud-sdk-bionic main' \

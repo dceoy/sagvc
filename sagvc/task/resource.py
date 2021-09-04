@@ -286,35 +286,6 @@ class CreateRegionListBed(SagvcTask):
         self.tabix_tbi(tsv_path=bed, tabix=self.tabix, preset='bed')
 
 
-@requires(FetchReferenceFasta)
-class ScanMicrosatellites(SagvcTask):
-    fa_path = luigi.Parameter()
-    dest_dir_path = luigi.Parameter(default='.')
-    msisensorpro = luigi.Parameter(default='msisensor-pro')
-    sh_config = luigi.DictParameter(default=dict())
-    priority = 60
-
-    def output(self):
-        fa = Path(self.input()[0].path)
-        return luigi.LocalTarget(
-            fa.parent.joinpath(f'{fa.stem}.microsatellites.tsv')
-        )
-
-    def run(self):
-        fa = Path(self.input()[0].path)
-        run_id = fa.stem
-        self.print_log(f'Scan microsatellites:\t{run_id}')
-        output_tsv = Path(self.output().path)
-        self.setup_shell(
-            run_id=run_id, commands=self.msisensorpro, cwd=self.dest_dir_path,
-            **self.sh_config
-        )
-        self.run_shell(
-            args=f'set -e && {self.msisensorpro} scan -d {fa} -o {output_tsv}',
-            input_files_or_dirs=fa, output_files_or_dirs=output_tsv
-        )
-
-
 class CreateIntervalListWithBed(SagvcTask):
     bed_path = luigi.Parameter()
     seq_dict_path = luigi.Parameter()

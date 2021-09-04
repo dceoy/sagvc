@@ -10,6 +10,7 @@ from ftarc.task.downloader import DownloadResourceFiles
 from ftarc.task.resource import FetchResourceVcf
 
 from .core import SagvcTask
+from .msisensorpro import ScanMicrosatellites
 from .resource import (CreateBiallelicSnpVcf, CreateRegionListBed,
                        CreateWgsIntervalListBeds)
 
@@ -89,6 +90,10 @@ class DownloadAndProcessResourceFiles(luigi.Task):
                 gatk=self.gatk, bedtools=self.bedtools, bgzip=self.bgzip,
                 tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
                 sh_config=self.sh_config
+            ),
+            ScanMicrosatellites(
+                fa_path=str(fa), dest_dir_path=self.dest_dir_path,
+                msisensorpro=self.msisensorpro, sh_config=self.sh_config
             ),
             *[
                 FetchResourceVcf(
