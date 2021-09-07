@@ -9,31 +9,30 @@ import luigi
 from ftarc.task.downloader import DownloadResourceFiles
 from ftarc.task.resource import FetchResourceVcf
 
-from .cnvkit import CreateAccessBed
+from .cnvkit import CreateCnvAcccessBed
 from .core import SagvcTask
-from .msisensorpro import ScanMicrosatellites
+from .msisensor import ScanMicrosatellites
 from .resource import (CreateBiallelicSnpVcf, CreateRegionListBed,
-                       CreateWgsExclusionIntervalListBed,
-                       CreateWgsIntervalListBed)
+                       CreateWgsIntervalListBeds)
 
 
 class DownloadAndProcessResourceFiles(luigi.Task):
     src_urls = luigi.ListParameter()
     dest_dir_path = luigi.Parameter(default='.')
     run_id = luigi.Parameter(default=gethostname())
+    wget = luigi.Parameter(default='wget')
     pigz = luigi.Parameter(default='pigz')
     pbzip2 = luigi.Parameter(default='pbzip2')
-    bwa = luigi.Parameter(default='bwa')
     samtools = luigi.Parameter(default='samtools')
     bgzip = luigi.Parameter(default='bgzip')
     tabix = luigi.Parameter(default='tabix')
     gatk = luigi.Parameter(default='gatk')
     bedtools = luigi.Parameter(default='bedtools')
-    msisensorpro = luigi.Parameter(default='msisensor-pro')
+    cnvkitpy = luigi.Parameter(default='cnvkit.py')
+    msisensor = luigi.Parameter(default='msisensor')
     use_gnomad_v3 = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
-    use_bwa_mem2 = luigi.BoolParameter(default=False)
     sh_config = luigi.DictParameter(default=dict())
     priority = 10
 
@@ -65,8 +64,11 @@ class DownloadAndProcessResourceFiles(luigi.Task):
             if f.name.endswith(('.fa', '.fna', '.fasta')):
                 for n in [f'{f.name}.fai', f'{f.stem}.dict',
                           f'{f.stem}.wgs.interval_list',
-                          f'{f.stem}.wgs.bed.gz',
-                          f'{f.stem}.wgs.bed.gz.tbi']:
+                          f'{f.stem}.wgs.bed.gz', f'{f.stem}.wgs.bed.gz.tbi',
+                          f'{f.stem}.wgs.bed', f'{f.stem}.wgs.excl.bed.gz',
+                          f'{f.stem}.wgs.excl.bed.gz.tbi',
+                          f'{f.stem}.wgs.excl.bed'
+                          ]:
                     yield luigi.LocalTarget(f.parent.joinpath(n))
             elif f.name.endswith('.vcf.gz'):
                 yield luigi.LocalTarget(f'{f}.tbi')
@@ -102,31 +104,24 @@ class DownloadAndProcessResourceFiles(luigi.Task):
                     n_cpu=self.n_cpu, sh_config=self.sh_config
                 ) for p in downloaded_file_paths if p.endswith('.list')
             ],
-            CreateWgsIntervalListBed(
+            CreateWgsIntervalListBeds(
                 fa_path=fa_path, dest_dir_path=self.dest_dir_path,
                 pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
                 gatk=self.gatk, bedtools=self.bedtools, bgzip=self.bgzip,
                 tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
                 sh_config=self.sh_config
             ),
-            CreateWgsExclusionIntervalListBed(
-                fa_path=fa_path, dest_dir_path=self.dest_dir_path,
-                pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
-                gatk=self.gatk, bedtools=self.bedtools, bgzip=self.bgzip,
-                tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-                sh_config=self.sh_config
-            ),
-            CreateAccessBed(
+            CreateCnvAcccessBed(
                 fa_path=fa_path, cnv_blacklist_path=cnv_blacklist_path,
-                dest_dir_path=self.dest_dir_path, cnvkit=self.cnvkit,
+                dest_dir_path=self.dest_dir_path, cnvkitpy=self.cnvkitpy,
                 pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
-                gatk=self.gatk, bedtools=self.bedtools, bgzip=self.bgzip,
-                tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                gatk=self.gatk, bgzip=self.bgzip, tabix=self.tabix,
+                n_cpu=self.n_cpu, memory_mb=self.memory_mb,
                 sh_config=self.sh_config
             ),
             ScanMicrosatellites(
                 fa_path=fa_path, dest_dir_path=self.dest_dir_path,
-                msisensorpro=self.msisensorpro, sh_config=self.sh_config
+                msisensor=self.msisensor, sh_config=self.sh_config
             )
         ]
 

@@ -4,22 +4,20 @@ from pathlib import Path
 
 import luigi
 from ftarc.task.resource import FetchReferenceFasta
-from luigi.util import requires
 
 from .core import SagvcTask
-from .resource import CreateRegionListBed, CreateWgsExclusionIntervalListBed
+from .resource import CreateRegionListBed
 
 
-class CreateAccessBed(SagvcTask):
+class CreateCnvAcccessBed(SagvcTask):
     fa_path = luigi.Parameter()
     cnv_blacklist_path = luigi.Parameter()
     dest_dir_path = luigi.Parameter(default='.')
-    cnvkit = luigi.Parameter(default='cnvkit')
+    cnvkitpy = luigi.Parameter(default='cnvkit.py')
     pigz = luigi.Parameter(default='pigz')
     pbzip2 = luigi.Parameter(default='pbzip2')
     samtools = luigi.Parameter(default='samtools')
     gatk = luigi.Parameter(default='gatk')
-    bedtools = luigi.Parameter(default='bedtools')
     bgzip = luigi.Parameter(default='bgzip')
     tabix = luigi.Parameter(default='tabix')
     n_cpu = luigi.IntParameter(default=1)
@@ -31,16 +29,9 @@ class CreateAccessBed(SagvcTask):
         return [
             FetchReferenceFasta(
                 fa_path=self.fa_path, pigz=self.pigz, pbzip2=self.pbzip2,
-                samtools=self.samtools, cnvkit=self.cnvkit,
+                samtools=self.samtools, gatk=self.gatk,
                 dest_dir_path=self.dest_dir_path, n_cpu=self.n_cpu,
                 memory_mb=self.memory_mb, sh_config=self.sh_config
-            ),
-            CreateWgsExclusionIntervalListBed(
-                fa_path=self.fa_path, dest_dir_path=self.dest_dir_path,
-                pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
-                gatk=self.gatk, bedtools=self.bedtools, bgzip=self.bgzip,
-                tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-                sh_config=self.sh_config
             ),
             CreateRegionListBed(
                 region_list_path=self.cnv_blacklist_path, bgzip=self.bgzip,
@@ -51,7 +42,8 @@ class CreateAccessBed(SagvcTask):
     def output(self):
         return luigi.LocalTarget(
             Path(self.dest_dir_path).resolve().joinpath(
-                Path(self.fa_path).stem + '.cnv.access.bed'
+                Path(self.fa_path).stem + '.not_in.'
+                + Path(self.cnv_blacklist_path).stem + '.access.bed'
             )
         )
 
@@ -59,36 +51,33 @@ class CreateAccessBed(SagvcTask):
         fa = Path(self.input()[0][0].path)
         run_id = fa.stem
         self.print_log(
-            f'Calculate the sequence-accessible coordinates:\t{run_id}'
+            f'Calculate accessible coordinates for CNV calling:\t{run_id}'
         )
-        excl_bed = Path(self.input()[1][0].path)
-        cnv_blacklist_bed = Path(self.input()[2][0].path)
+        cnv_blacklist_bed = Path(self.input()[1][-1].path)
         output_bed = Path(self.output().path)
         self.setup_shell(
-            run_id=run_id, commands=self.cnvkit, cwd=output_bed.parent,
+            run_id=run_id, commands=self.cnvkitpy, cwd=output_bed.parent,
             **self.sh_config
         )
         self.run_shell(
             args=(
-                f'set -e && {self.cnvkit} access'
-                + f' --exclude={excl_bed}'
+                f'set -e && {self.cnvkitpy} access'
                 + f' --exclude={cnv_blacklist_bed}'
                 + f' --output={output_bed} {fa}'
             ),
-            input_files_or_dirs=[fa, excl_bed, cnv_blacklist_bed],
+            input_files_or_dirs=[fa, cnv_blacklist_bed],
             output_files_or_dirs=output_bed
         )
 
 
-@requires(FetchReferenceFasta)
-class CallCnvWithCnvkit(SagvcTask):
+class CallSomaticCnvWithCnvkit(SagvcTask):
     tumor_cram_path = luigi.Parameter()
     normal_cram_path = luigi.Parameter()
     fa_path = luigi.Parameter()
     refflat_txt_path = luigi.Parameter()
-    access_bed_path = luigi.Parameter(default='')
+    access_bed_path = luigi.Parameter()
     dest_dir_path = luigi.Parameter(default='.')
-    cnvkit = luigi.Parameter(default='cnvkit')
+    cnvkitpy = luigi.Parameter(default='cnvkit.py')
     samtools = luigi.Parameter(default='samtools')
     rscript = luigi.Parameter(default='Rscript')
     seq_method = luigi.Parameter(default='wgs')
@@ -134,18 +123,19 @@ class CallCnvWithCnvkit(SagvcTask):
         output_ref_cnn = dest_dir.joinpath(f'{normal_cram.stem}.reference.cnn')
         output_call_seg = dest_dir.joinpath(f'{output_call_cns.stem}.seg')
         self.setup_shell(
-            run_id=run_id, commands=[self.cnvkit, self.samtools, self.rscript],
+            run_id=run_id,
+            commands=[self.cnvkitpy, self.samtools, self.rscript],
             cwd=dest_dir, **self.sh_config
         )
         self.run_shell(
             args=(
-                f'set -e && {self.cnvkit} batch'
+                f'set -e && {self.cnvkitpy} batch'
                 + f' --seq-method={self.seq_method}'
                 + f' --fasta={fa}'
                 + f' --access={access_bed}'
                 + f' --annotate={refflat_txt}'
                 + f' --processes={self.n_cpu}'
-                + ' --diagram --scatter'
+                + ' --drop-low-coverage --diagram --scatter'
                 + f' --output-dir={dest_dir}'
                 + f' --output-reference={output_ref_cnn}'
                 + f' --normal={normal_cram}'
@@ -158,7 +148,7 @@ class CallCnvWithCnvkit(SagvcTask):
         )
         self.run_shell(
             args=(
-                f'set -e && {self.cnvkit} export seg'
+                f'set -e && {self.cnvkitpy} export seg'
                 + f' --output={output_call_seg}'
                 + f' {output_call_cns}'
             ),

@@ -5,25 +5,36 @@ Somatic and Germline Variant Calling Pipeline
 Usage:
     sagvc download [--debug|--info] [--cpus=<int>] [--workers=<int>]
         [--skip-cleaning] [--print-subprocesses] [--use-gnomad-v3]
-        [--dest-dir=<path>]
+        [--use-msisensor-pro] [--dest-dir=<path>]
     sagvc write-af-only-vcf [--debug|--info] [--cpus=<int>]
         [--src-path=<path>|--src-url=<url>] [--dest-dir=<path>]
     sagvc haplotypecaller [--debug|--info] [--cpus=<int>] [--workers=<int>]
         [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
-        [--interval-list=<interval_list_path>|--bed=<bed_path>] <fa_path>
-        <dbsnp_vcf_path> <sam_path>...
+        [--interval-list=<path>|--bed=<path>] <fa_path> <dbsnp_vcf_path>
+        <sam_path>...
     sagvc mutect2 [--debug|--info] [--cpus=<int>] [--workers=<int>]
         [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
-        [--interval-list=<interval_list_path>|--bed=<bed_path>]
-        [--tumor-sample=<name>] [--normal-sample=<name>] <fa_path>
-        <germline_resource_vcf_path> <sam_path>...
+        [--interval-list=<path>|--bed=<path>] [--tumor-sample=<name>]
+        [--normal-sample=<name>] <fa_path> <germline_resource_vcf_path>
+        <sam_path>...
+    sagvc cnvkit [--debug|--info] [--cpus=<int>] [--workers=<int>]
+        [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
+        [--seq-method=<type>] [--access-bed=<path>] [--refflat-txt=<path>]
+        <fa_path> <tumor_sam_path> <normal_sam_path>
+    sagvc msisensor [--debug|--info] [--cpus=<int>] [--workers=<int>]
+        [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
+        [--use-msisensor-pro] [--bed=<path>] <fa_path>
+        <microsatellites_tsv_path> <tumor_sam_path> <normal_sam_path>
     sagvc -h|--help
     sagvc --version
 
 Commands:
     download                Download and preprocess hg38 resources
-    haplotypecaller         Identify germline short variants
-    mutect2                 Identify somatic short variants
+    write-af-only-vcf       Extract and write only AF from VCF INFO
+    haplotypecaller         Call germline short variants using GATK
+    mutect2                 Call somatic short variants using GATK
+    cnvkit                  Call somatic CNV using CNVkit
+    msisensor               Evaluate MSI using MSIsensor
 
 Options:
     -h, --help              Print help and exit
@@ -34,13 +45,17 @@ Options:
     --skip-cleaning         Skip incomlete file removal when a task fails
     --print-subprocesses    Print STDOUT/STDERR outputs from subprocesses
     --use-gnomad-v3         Use gnomAD v3 instead of v2
+    --use-msisensor-pro     Use MSIsensor-pro instead of MSIsensor
     --dest-dir=<path>       Specify a destination directory path [default: .]
     --src-path=<path>       Specify a source path
     --src-url=<url>         Specify a source URL
-    --interval-list=<interval_list_path>, --bed=<bed_path>
+    --interval-list=<path>, --bed=<path>
                             Specify a path to an interval_list or BED
     --tumor-sample=<name>   Specify a tumor sample name
     --normal-sample=<name>  Specify a normal sample name
+    --seq-method=<type>     Specify a sequencing assay type [default: wgs]
+    --access-bed=<path>     Specify a path to a CNV accessible region BED
+    --refflat-txt=<path>    Specify a path to a refFlat text file
 
 Args:
     <fa_path>               Path to an reference FASTA file
@@ -49,11 +64,14 @@ Args:
     <germline_resource_vcf_path>
                             Path to a germline resource VCF file
     <sam_path>              Path to a sorted CRAM or BAM file
+    <tumor_sam_path>        Path to a tumor CRAM file
+    <normal_sam_path>       Path to a normal CRAM file
+    <ms_tsv_path>           Path to a microsatellites TSV file
 """
 
 import logging
 import os
-from math import floor
+from math import ceil, floor
 from pathlib import Path
 
 from docopt import docopt
@@ -62,8 +80,10 @@ from ftarc.cli.util import (build_luigi_tasks, fetch_executable, print_log,
 from psutil import cpu_count, virtual_memory
 
 from .. import __version__
+from ..task.cnvkit import CallSomaticCnvWithCnvkit
 from ..task.downloader import (DownloadAndProcessResourceFiles,
                                WritePassingAfOnlyVcf)
+from ..task.msisensor import ScoreMsiWithMsisensor
 
 
 def main():
@@ -82,7 +102,11 @@ def main():
     logger.debug(f'args:{os.linesep}{args}')
     print_log(f'Start the workflow of sagvc {__version__}')
     n_cpu = int(args['--cpus'] or cpu_count())
-    memory_mb = virtual_memory().total / 1024 / 1024 / 2
+    n_worker = min(int(args['--workers'] or 1), n_cpu)
+    n_cpu_per_worker = max(floor(n_cpu / n_worker), 1)
+    memory_mb_per_worker = ceil(
+        virtual_memory().total / 1024 / 1024 / 2 / n_worker
+    )
     sh_config = {
         'log_dir_path': args['--dest-dir'],
         'remove_if_failed': (not args['--skip-cleaning']),
@@ -90,47 +114,36 @@ def main():
         'executable': fetch_executable('bash')
     }
     if args['download']:
-        url_dict = read_yml(
-            path=Path(__file__).parent.parent.joinpath('static/urls.yml')
-        )
-        command_dict = {
-            'bwa': fetch_executable(
-                'bwa-mem2' if args['--use-bwa-mem2'] else 'bwa'
-            ),
-            'msisensor_pro': fetch_executable('msisensor-pro'),
-            **{
-                c: fetch_executable(c) for c in [
-                    'wget', 'pbzip2', 'bgzip', 'pigz', 'samtools', 'tabix',
-                    'gatk', 'bedtools'
-                ]
-            }
-        }
-        anns = (
-            {k for k in ['snpeff', 'funcotator', 'vep'] if args[f'--{k}']}
-            or {'snpeff', 'funcotator', 'vep'}
-        )
-        n_worker = min(int(args['--workers']), len(anns), n_cpu)
-        n_cpu_per_worker = max(1, floor(n_cpu / n_worker))
-        memory_mb = int(
-            virtual_memory().total / 1024 / 1024 / 2 / n_worker
-        )
-        common_kwargs = {
-            'dest_dir_path': args['--dest-dir'], 'sh_config': sh_config
-        }
         build_luigi_tasks(
             tasks=[
                 DownloadAndProcessResourceFiles(
-                    src_url_dict=url_dict,
-                    use_gnomad_exome=args['--use-gnomad-exome'],
-                    use_bwa_mem2=args['--use-bwa-mem2'], **command_dict,
-                    n_cpu=n_cpu_per_worker, memory_mb=memory_mb,
-                    **common_kwargs
+                    src_urls=list(
+                        read_yml(
+                            path=Path(__file__).parent.parent.joinpath(
+                                'static/urls.yml'
+                            )
+                        ).values()
+                    ),
+                    dest_dir_path=args['--dest-dir'],
+                    **{
+                        c: fetch_executable(c) for c in [
+                            'wget', 'pbzip2', 'bgzip', 'pigz', 'samtools',
+                            'tabix', 'gatk', 'bedtools'
+                        ]
+                    },
+                    cnvkitpy=fetch_executable('cnvkit.py'),
+                    msisensor=fetch_executable(
+                        'msisensor-pro' if args['--use-msisensor-pro']
+                        else 'msisensor'
+                    ),
+                    use_gnomad_v3=args['--use-gnomad-v3'],
+                    n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
+                    sh_config=sh_config
                 )
             ],
             workers=n_worker, log_level=log_level
         )
     elif args['write-af-only-vcf']:
-        dest_dir_path = str(Path(args['--dest-dir']).resolve())
         build_luigi_tasks(
             tasks=[
                 WritePassingAfOnlyVcf(
@@ -139,9 +152,9 @@ def main():
                         if args['--src-path'] else ''
                     ),
                     src_url=(args['--src-url'] or ''),
-                    dest_dir_path=dest_dir_path,
+                    dest_dir_path=args['--dest-dir'],
                     **{c: fetch_executable(c) for c in ['wget', 'bgzip']},
-                    n_cpu=n_cpu, sh_config=sh_config
+                    n_cpu=n_cpu_per_worker, sh_config=sh_config
                 )
             ],
             log_level=log_level
@@ -150,3 +163,41 @@ def main():
         pass
     elif args['mutect2']:
         pass
+    elif args['cnvkit']:
+        build_luigi_tasks(
+            tasks=[
+                CallSomaticCnvWithCnvkit(
+                    tumor_cram_path=args['<tumor_sam_path>'],
+                    normal_cram_path=args['<normal_sam_path>'],
+                    fa_path=args['<fa_path>'],
+                    refflat_txt_path=args['--refflat-txt'],
+                    access_bed_path=args['--access-bed'],
+                    dest_dir_path=args['--dest-dir'],
+                    cnvkitpy=fetch_executable('cnvkit.py'),
+                    samtools=fetch_executable('samtools'),
+                    rscript=fetch_executable('Rscript'),
+                    seq_method=args['--seq-method'],
+                    n_cpu=n_cpu_per_worker, sh_config=sh_config
+                )
+            ],
+            workers=n_worker, log_level=log_level
+        )
+    elif args['msisensor']:
+        build_luigi_tasks(
+            tasks=[
+                ScoreMsiWithMsisensor(
+                    tumor_cram_path=args['<tumor_sam_path>'],
+                    normal_cram_path=args['<normal_sam_path>'],
+                    fa_path=args['<fa_path>'],
+                    microsatellites_tsv_path=args['<ms_tsv_path>'],
+                    bed_path=args['--bed'], dest_dir_path=args['--dest-dir'],
+                    msisensor=fetch_executable(
+                        'msisensor-pro' if args['--use-msisensor-pro']
+                        else 'msisensor'
+                    ),
+                    samtools=fetch_executable('samtools'),
+                    n_cpu=n_cpu_per_worker, sh_config=sh_config
+                )
+            ],
+            workers=n_worker, log_level=log_level
+        )

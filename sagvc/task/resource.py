@@ -113,7 +113,7 @@ class CreateWgsIntervalList(SagvcTask):
 
 
 @requires(CreateWgsIntervalList)
-class CreateWgsExclusionIntervalListBed(SagvcTask):
+class CreateWgsIntervalListBeds(SagvcTask):
     fa_path = luigi.Parameter()
     dest_dir_path = luigi.Parameter(default='.')
     pigz = luigi.Parameter(default='pigz')
@@ -132,19 +132,29 @@ class CreateWgsExclusionIntervalListBed(SagvcTask):
         interval_list = Path(self.input().path)
         return [
             luigi.LocalTarget(
-                dest_dir.joinpath(f'{interval_list.stem}.excl.bed.gz{s}')
-            ) for s in ['', '.tbi']
+                dest_dir.joinpath(f'{interval_list.stem}.{s}')
+            ) for s in [
+                'bed.gz', 'bed.gz.tbi', 'bed', 'excl.bed.gz',
+                'excl.bed.gz.tbi', 'excl.bed'
+            ]
         ]
 
     def run(self):
-        yield CreateExclusionIntervalListBed(
-            interval_list_path=self.input().path, fa_path=self.fa_path,
-            dest_dir_path=self.dest_dir_path, pigz=self.pigz,
-            pbzip2=self.pbzip2, samtools=self.samtools, gatk=self.gatk,
-            bedtools=self.bedtools, bgzip=self.bgzip, tabix=self.tabix,
-            n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-            sh_config=self.sh_config
-        )
+        yield [
+            CreateExclusionIntervalListBed(
+                interval_list_path=self.input().path,
+                dest_dir_path=self.dest_dir_path, bgzip=self.bgzip,
+                tabix=self.tabix, n_cpu=self.n_cpu, sh_config=self.sh_config
+            ),
+            CreateExclusionIntervalListBed(
+                interval_list_path=self.input().path, fa_path=self.fa_path,
+                dest_dir_path=self.dest_dir_path, pigz=self.pigz,
+                pbzip2=self.pbzip2, samtools=self.samtools, gatk=self.gatk,
+                bedtools=self.bedtools, bgzip=self.bgzip, tabix=self.tabix,
+                n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                sh_config=self.sh_config
+            )
+        ]
 
 
 class CreateIntervalListBed(SagvcTask):
@@ -161,15 +171,16 @@ class CreateIntervalListBed(SagvcTask):
         interval_list = Path(self.input().path)
         return [
             luigi.LocalTarget(
-                dest_dir.joinpath(f'{interval_list.stem}.bed.gz{s}')
-            ) for s in ['', '.tbi']
+                dest_dir.joinpath(f'{interval_list.stem}.bed{s}')
+            ) for s in ['.gz', '.gz.tbi', '']
         ]
 
     def run(self):
         run_id = Path(self.input().path).stem
         self.print_log(f'Create an interval_list BED:\t{run_id}')
         interval_list = Path(self.input().path).resolve()
-        bed = Path(self.output()[0].path)
+        bed_gz = Path(self.output()[0].path)
+        bed = Path(self.output()[2].path)
         pyscript = Path(__file__).resolve().parent.parent.joinpath(
             'script/interval_list2bed.py'
         )
@@ -179,13 +190,16 @@ class CreateIntervalListBed(SagvcTask):
         )
         self.run_shell(
             args=(
-                'set -eo pipefail'
-                + f' && {sys.executable} {pyscript} {interval_list}'
-                + f' | {self.bgzip} -@ {self.n_cpu} -c > {bed}'
+                f'set -e && {sys.executable}'
+                + f' {pyscript} {interval_list} > {bed}'
             ),
             input_files_or_dirs=interval_list, output_files_or_dirs=bed
         )
-        self.tabix_tbi(tsv_path=bed, tabix=self.tabix, preset='bed')
+        self.run_shell(
+            args=f'set -e && {self.bgzip} -@ {self.n_cpu} -c {bed} > {bed_gz}',
+            input_files_or_dirs=bed, output_files_or_dirs=bed_gz
+        )
+        self.tabix_tbi(tsv_path=bed_gz, tabix=self.tabix, preset='bed')
 
 
 @requires(CreateIntervalListBed, FetchReferenceFasta)
@@ -205,8 +219,8 @@ class CreateExclusionIntervalListBed(SagvcTask):
         interval_list = Path(self.input().path)
         return [
             luigi.LocalTarget(
-                dest_dir.joinpath(f'{interval_list.stem}.excl.bed.gz{s}')
-            ) for s in ['', '.tbi']
+                dest_dir.joinpath(f'{interval_list.stem}.excl.bed{s}')
+            ) for s in ['.gz', '.gz.tbi', '']
         ]
 
     def run(self):
@@ -214,11 +228,13 @@ class CreateExclusionIntervalListBed(SagvcTask):
         run_id = input_bed.stem
         self.print_log(f'Create an exclusion interval_list BED:\t{run_id}')
         fai = Path(f'{self.fa_path}.fai').resolve()
-        excl_bed = Path(self.output()[0].path)
-        genome_bed_path = self.output()[2].path
+        excl_bed_gz = Path(self.output()[0].path)
+        excl_bed = Path(self.output()[2].path)
+        dest_dir = excl_bed.parent
+        genome_bed = dest_dir.joinpath(f'{fai.stem}.bed')
         self.setup_shell(
-            run_id=run_id, commands=[self.bgzip, self.tabix],
-            cwd=input_bed.parent, **self.sh_config
+            run_id=run_id, commands=[self.bgzip, self.tabix], cwd=dest_dir,
+            **self.sh_config
         )
         self.run_shell(
             args=(
@@ -227,23 +243,28 @@ class CreateExclusionIntervalListBed(SagvcTask):
                     'from fileinput import input; '
                     '[print("{0}\\t0\\t{1}".format(*s.split()[:2]))'
                     ' for s in input()];'
-                ) + f' {fai}'
-                + f' | {self.bgzip} -@ {self.n_cpu} -c > {genome_bed_path}'
+                ) + f' {fai} > {genome_bed}'
             ),
-            input_files_or_dirs=fai, output_files_or_dirs=genome_bed_path
+            input_files_or_dirs=fai, output_files_or_dirs=genome_bed
         )
         self.run_shell(
             args=(
                 f'set -eo pipefail && {self.bedtools} subtract'
-                + f' -a {genome_bed_path} -b {input_bed}'
+                + f' -a {genome_bed} -b {input_bed}'
                 + f' | {self.bgzip} -@ {self.n_cpu} -c > {excl_bed}'
             ),
-            input_files_or_dirs=[genome_bed_path, input_bed],
+            input_files_or_dirs=[genome_bed, input_bed],
             output_files_or_dirs=excl_bed
         )
-        self.remove_files_and_dirs(genome_bed_path)
-        for p in [genome_bed_path, excl_bed]:
-            self.tabix_tbi(tsv_path=p, tabix=self.tabix, preset='bed')
+        self.remove_files_and_dirs(genome_bed)
+        self.run_shell(
+            args=(
+                f'set -e && {self.bgzip} -@ {self.n_cpu} -c {excl_bed}'
+                + f' > {excl_bed_gz}'
+            ),
+            input_files_or_dirs=excl_bed, output_files_or_dirs=excl_bed_gz
+        )
+        self.tabix_tbi(tsv_path=excl_bed_gz, tabix=self.tabix, preset='bed')
 
 
 class CreateRegionListBed(SagvcTask):
@@ -258,15 +279,16 @@ class CreateRegionListBed(SagvcTask):
         region_list = Path(self.region_list_path)
         return [
             luigi.LocalTarget(
-                region_list.parent.joinpath(region_list.stem + f'.bed.gz{s}')
-            ) for s in ['', '.tbi']
+                region_list.parent.joinpath(region_list.stem + f'.bed{s}')
+            ) for s in ['.gz', '.gz.tbi', '']
         ]
 
     def run(self):
         region_list = Path(self.input().path)
         run_id = region_list.stem
         self.print_log(f'Create a region list BED:\t{run_id}')
-        bed = Path(self.output()[0].path)
+        bed_gz = Path(self.output()[0].path)
+        bed = Path(self.output()[2].path)
         self.setup_shell(
             run_id=run_id, commands=[self.bgzip, self.tabix],
             cwd=region_list.parent, **self.sh_config
@@ -279,12 +301,15 @@ class CreateRegionListBed(SagvcTask):
         self.run_shell(
             args=(
                 f'set -eo pipefail && {sys.executable}'
-                + f' -c \'{pycmd}\' {region_list}'
-                + f' | {self.bgzip} -@ {self.n_cpu} -c > {bed}'
+                + f' -c \'{pycmd}\' {region_list} > {bed}'
             ),
             input_files_or_dirs=region_list, output_files_or_dirs=bed
         )
-        self.tabix_tbi(tsv_path=bed, tabix=self.tabix, preset='bed')
+        self.run_shell(
+            args=f'set -e && {self.bgzip} -@ {self.n_cpu} -c {bed} > {bed_gz}',
+            input_files_or_dirs=bed, output_files_or_dirs=bed_gz
+        )
+        self.tabix_tbi(tsv_path=bed_gz, tabix=self.tabix, preset='bed')
 
 
 class CreateIntervalListWithBed(SagvcTask):
@@ -330,8 +355,8 @@ class CreateIntervalListWithBed(SagvcTask):
         )
 
 
-@requires(CreateIntervalListBed)
-class UncompressIntervalListBed(SagvcTask):
+class DecompressBgzipFile(SagvcTask):
+    bgz_path = luigi.Parameter()
     bgzip = luigi.Parameter(default='bgzip')
     dest_dir_path = luigi.Parameter(default='.')
     n_cpu = luigi.IntParameter(default=1)
@@ -341,25 +366,25 @@ class UncompressIntervalListBed(SagvcTask):
     def output(self):
         return luigi.LocalTarget(
             Path(self.dest_dir_path).resolve().joinpath(
-                Path(self.input()[0].path).stem
+                Path(self.bgz_path).stem
             )
         )
 
     def run(self):
-        output_bed = Path(self.output().path)
-        run_id = output_bed.stem
-        self.print_log(f'Uncompress bgzip BED:\t{run_id}')
-        bed_gz = Path(self.input()[0].path)
+        output_file = Path(self.output().path)
+        run_id = output_file.stem
+        self.print_log(f'Decompress bgzip BED:\t{run_id}')
+        bgz = Path(self.bgz_path).resolve()
         self.setup_shell(
-            run_id=run_id, commands=self.bgzip, cwd=output_bed.parent,
+            run_id=run_id, commands=self.bgzip, cwd=output_file.parent,
             **self.sh_config
         )
         self.run_shell(
             args=(
-                f'set -e && {self.bgzip} -@ {self.n_cpu} -dc {bed_gz}'
-                + f' > {output_bed}'
+                f'set -e && {self.bgzip} -@ {self.n_cpu} -dc {bgz}'
+                + f' > {output_file}'
             ),
-            input_files_or_dirs=bed_gz, output_files_or_dirs=output_bed
+            input_files_or_dirs=bgz, output_files_or_dirs=output_file
         )
 
 

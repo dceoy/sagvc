@@ -8,6 +8,7 @@ COPY --from=dceoy/bedtools:latest /usr/local/src/bedtools2 /usr/local/src/bedtoo
 COPY --from=dceoy/gatk:latest /opt/conda /opt/conda
 COPY --from=dceoy/gatk:latest /opt/gatk /opt/gatk
 COPY --from=dceoy/delly:latest /usr/local/bin/delly /usr/local/bin/delly
+COPY --from=dceoy/msisensor:latest /usr/local/bin/msisensor /usr/local/bin/msisensor
 COPY --from=dceoy/msisensor-pro:latest /usr/local/bin/msisensor-pro /usr/local/bin/msisensor-pro
 ADD https://bootstrap.pypa.io/get-pip.py /tmp/get-pip.py
 ADD . /tmp/sagvc
@@ -86,9 +87,9 @@ RUN set -e \
       && apt-get -y dist-upgrade \
       && apt-get -y install --no-install-recommends --no-install-suggests \
         apt-transport-https apt-utils ca-certificates curl gnupg gnuplot \
-        libcurl3-gnutls libgsl23 libgkl-jni libncurses5 openjdk-8-jre \
-        texlive-fonts-extra texlive-fonts-recommended texlive-latex-base \
-        texlive-latex-extra wget
+        libcurl3-gnutls libgsl23 libgkl-jni libncurses5 openjdk-8-jre pbzip2 \
+        perl pigz texlive-fonts-extra texlive-fonts-recommended \
+        texlive-latex-base texlive-latex-extra wget
 
 RUN set -eo pipefail \
       && echo 'deb http://packages.cloud.google.com/apt cloud-sdk-bionic main' \
