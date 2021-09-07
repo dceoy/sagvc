@@ -113,7 +113,7 @@ class CreateWgsIntervalList(SagvcTask):
 
 
 @requires(CreateWgsIntervalList)
-class CreateWgsIntervalListBeds(SagvcTask):
+class CreateWgsExclusionIntervalListBed(SagvcTask):
     fa_path = luigi.Parameter()
     dest_dir_path = luigi.Parameter(default='.')
     pigz = luigi.Parameter(default='pigz')
@@ -131,8 +131,9 @@ class CreateWgsIntervalListBeds(SagvcTask):
         dest_dir = Path(self.dest_dir_path).resolve()
         interval_list = Path(self.input().path)
         return [
-            luigi.LocalTarget(dest_dir.joinpath(f'{interval_list.stem}.{s}'))
-            for s in ['bed.gz', 'bed.gz.tbi', 'excl.bed.gz', 'excl.bed.gz.tbi']
+            luigi.LocalTarget(
+                dest_dir.joinpath(f'{interval_list.stem}.excl.bed.gz{s}')
+            ) for s in ['', '.tbi']
         ]
 
     def run(self):
@@ -326,6 +327,39 @@ class CreateIntervalListWithBed(SagvcTask):
             ),
             input_files_or_dirs=[bed, seq_dict],
             output_files_or_dirs=interval_list
+        )
+
+
+@requires(CreateIntervalListBed)
+class UncompressIntervalListBed(SagvcTask):
+    bgzip = luigi.Parameter(default='bgzip')
+    dest_dir_path = luigi.Parameter(default='.')
+    n_cpu = luigi.IntParameter(default=1)
+    sh_config = luigi.DictParameter(default=dict())
+    priority = 60
+
+    def output(self):
+        return luigi.LocalTarget(
+            Path(self.dest_dir_path).resolve().joinpath(
+                Path(self.input()[0].path).stem
+            )
+        )
+
+    def run(self):
+        output_bed = Path(self.output().path)
+        run_id = output_bed.stem
+        self.print_log(f'Uncompress bgzip BED:\t{run_id}')
+        bed_gz = Path(self.input()[0].path)
+        self.setup_shell(
+            run_id=run_id, commands=self.bgzip, cwd=output_bed.parent,
+            **self.sh_config
+        )
+        self.run_shell(
+            args=(
+                f'set -e && {self.bgzip} -@ {self.n_cpu} -dc {bed_gz}'
+                + f' > {output_bed}'
+            ),
+            input_files_or_dirs=bed_gz, output_files_or_dirs=output_bed
         )
 
 

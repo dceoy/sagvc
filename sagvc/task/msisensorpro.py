@@ -44,11 +44,11 @@ class ScoreMsiWithMsisensorPro(SagvcTask):
     tumor_cram_path = luigi.Parameter()
     normal_cram_path = luigi.Parameter()
     fa_path = luigi.Parameter()
-    samtools = luigi.Parameter(default='samtools')
     microsatellites_tsv_path = luigi.Parameter()
     bed_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     msisensorpro = luigi.Parameter(default='msisensor-pro')
+    samtools = luigi.Parameter(default='samtools')
     n_cpu = luigi.IntParameter(default=1)
     sh_config = luigi.DictParameter(default=dict())
     priority = 20
@@ -73,7 +73,7 @@ class ScoreMsiWithMsisensorPro(SagvcTask):
                 remove_input=False, index_sam=True, sh_config=self.sh_config
             ) for p in [self.tumor_cram_path, self.normal_cram_path]
         ]
-        output_files = [Path(i.path) for i in self.input()]
+        output_files = [Path(i.path) for i in self.output()]
         run_id = Path(output_files[0].stem).stem
         self.print_log(f'Score MSI with MSIsensor-pro:\t{run_id}')
         bams = [Path(i[0].path) for i in bam_targets]

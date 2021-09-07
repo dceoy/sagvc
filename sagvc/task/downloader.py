@@ -9,10 +9,12 @@ import luigi
 from ftarc.task.downloader import DownloadResourceFiles
 from ftarc.task.resource import FetchResourceVcf
 
+from .cnvkit import CreateAccessBed
 from .core import SagvcTask
 from .msisensorpro import ScanMicrosatellites
 from .resource import (CreateBiallelicSnpVcf, CreateRegionListBed,
-                       CreateWgsIntervalListBeds)
+                       CreateWgsExclusionIntervalListBed,
+                       CreateWgsIntervalListBed)
 
 
 class DownloadAndProcessResourceFiles(luigi.Task):
@@ -70,30 +72,23 @@ class DownloadAndProcessResourceFiles(luigi.Task):
                 yield luigi.LocalTarget(f'{f}.tbi')
 
     def run(self):
-        gnomad_vcf = Path(self.input()['gnomad_vcf'][0].path)
+        gnomad_vcf = Path(self.input()[0][0].path)
         downloaded_file_paths = [i.path for i in self.input()[1]]
-        fa = [
-            Path(p) for p in downloaded_file_paths
+        cnv_blacklist_path = [
+            p for p in downloaded_file_paths
+            if p.endswith('.list') and 'blacklist' in Path(p).stem
+        ][0]
+        fa_path = [
+            p for p in downloaded_file_paths
             if p.endswith(('.fa', '.fna', '.fasta'))
         ][0]
         yield [
             CreateBiallelicSnpVcf(
-                input_vcf_path=str(gnomad_vcf), fa_path=str(fa),
+                input_vcf_path=str(gnomad_vcf), fa_path=fa_path,
                 dest_dir_path=self.dest_dir_path, pigz=self.pigz,
                 pbzip2=self.pbzip2, samtools=self.samtools, gatk=self.gatk,
                 n_cpu=self.n_cpu, memory_mb=self.memory_mb,
                 sh_config=self.sh_config
-            ),
-            CreateWgsIntervalListBeds(
-                fa_path=str(fa), dest_dir_path=self.dest_dir_path,
-                pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
-                gatk=self.gatk, bedtools=self.bedtools, bgzip=self.bgzip,
-                tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-                sh_config=self.sh_config
-            ),
-            ScanMicrosatellites(
-                fa_path=str(fa), dest_dir_path=self.dest_dir_path,
-                msisensorpro=self.msisensorpro, sh_config=self.sh_config
             ),
             *[
                 FetchResourceVcf(
@@ -106,7 +101,33 @@ class DownloadAndProcessResourceFiles(luigi.Task):
                     region_list_path=p, bgzip=self.bgzip, tabix=self.tabix,
                     n_cpu=self.n_cpu, sh_config=self.sh_config
                 ) for p in downloaded_file_paths if p.endswith('.list')
-            ]
+            ],
+            CreateWgsIntervalListBed(
+                fa_path=fa_path, dest_dir_path=self.dest_dir_path,
+                pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
+                gatk=self.gatk, bedtools=self.bedtools, bgzip=self.bgzip,
+                tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                sh_config=self.sh_config
+            ),
+            CreateWgsExclusionIntervalListBed(
+                fa_path=fa_path, dest_dir_path=self.dest_dir_path,
+                pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
+                gatk=self.gatk, bedtools=self.bedtools, bgzip=self.bgzip,
+                tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                sh_config=self.sh_config
+            ),
+            CreateAccessBed(
+                fa_path=fa_path, cnv_blacklist_path=cnv_blacklist_path,
+                dest_dir_path=self.dest_dir_path, cnvkit=self.cnvkit,
+                pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
+                gatk=self.gatk, bedtools=self.bedtools, bgzip=self.bgzip,
+                tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                sh_config=self.sh_config
+            ),
+            ScanMicrosatellites(
+                fa_path=fa_path, dest_dir_path=self.dest_dir_path,
+                msisensorpro=self.msisensorpro, sh_config=self.sh_config
+            )
         ]
 
 
