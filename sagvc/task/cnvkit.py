@@ -29,12 +29,12 @@ class CreateCnvAcccessBed(SagvcTask):
         return [
             FetchReferenceFasta(
                 fa_path=self.fa_path, pigz=self.pigz, pbzip2=self.pbzip2,
-                samtools=self.samtools, gatk=self.gatk,
-                dest_dir_path=self.dest_dir_path, n_cpu=self.n_cpu,
+                samtools=self.samtools, gatk=self.gatk, n_cpu=self.n_cpu,
                 memory_mb=self.memory_mb, sh_config=self.sh_config
             ),
             CreateRegionListBed(
-                region_list_path=self.cnv_blacklist_path, bgzip=self.bgzip,
+                region_list_path=self.cnv_blacklist_path,
+                dest_dir_path=self.dest_dir_path, bgzip=self.bgzip,
                 tabix=self.tabix, n_cpu=self.n_cpu, sh_config=self.sh_config
             )
         ]

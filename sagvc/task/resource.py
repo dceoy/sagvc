@@ -22,15 +22,10 @@ class CreateBiallelicSnpVcf(SagvcTask):
     priority = 90
 
     def output(self):
-        dest_dir = Path(self.dest_dir_path).resolve()
-        input_vcf = Path(self.input_vcf_path)
-        return [
-            luigi.LocalTarget(
-                dest_dir.joinpath(
-                    Path(input_vcf.stem).stem + f'.biallelic_snp.vcf.gz{s}'
-                )
-            ) for s in ['', '.tbi']
-        ]
+        output_vcf = Path(self.dest_dir_path).resolve().joinpath(
+            Path(Path(self.input_vcf_path).stem).stem + '.biallelic_snp.vcf.gz'
+        )
+        return [luigi.LocalTarget(f'{output_vcf}{s}') for s in ['', '.tbi']]
 
     def run(self):
         run_id = Path(self.input_vcf_path).stem
@@ -167,13 +162,10 @@ class CreateIntervalListBed(SagvcTask):
     priority = 70
 
     def output(self):
-        dest_dir = Path(self.dest_dir_path).resolve()
-        interval_list = Path(self.input().path)
-        return [
-            luigi.LocalTarget(
-                dest_dir.joinpath(f'{interval_list.stem}.bed{s}')
-            ) for s in ['.gz', '.gz.tbi', '']
-        ]
+        bed = Path(self.dest_dir_path).resolve().joinpath(
+            Path(self.input().path).stem + '.bed'
+        )
+        return [luigi.LocalTarget(f'{bed}{s}') for s in ['.gz', '.gz.tbi', '']]
 
     def run(self):
         run_id = Path(self.input().path).stem
@@ -215,17 +207,16 @@ class CreateExclusionIntervalListBed(SagvcTask):
     priority = 70
 
     def output(self):
-        dest_dir = Path(self.dest_dir_path).resolve()
-        interval_list = Path(self.input().path)
+        excl_bed = Path(self.dest_dir_path).resolve().joinpath(
+            Path(Path(self.input()[0][0].path).stem).stem + '.excl.bed'
+        )
         return [
-            luigi.LocalTarget(
-                dest_dir.joinpath(f'{interval_list.stem}.excl.bed{s}')
-            ) for s in ['.gz', '.gz.tbi', '']
+            luigi.LocalTarget(f'{excl_bed}{s}') for s in ['.gz', '.gz.tbi', '']
         ]
 
     def run(self):
         input_bed = Path(self.input()[0][0].path)
-        run_id = input_bed.stem
+        run_id = Path(input_bed.stem).stem
         self.print_log(f'Create an exclusion interval_list BED:\t{run_id}')
         fai = Path(f'{self.fa_path}.fai').resolve()
         excl_bed_gz = Path(self.output()[0].path)
@@ -269,6 +260,7 @@ class CreateExclusionIntervalListBed(SagvcTask):
 
 class CreateRegionListBed(SagvcTask):
     region_list_path = luigi.Parameter()
+    dest_dir_path = luigi.Parameter(default='.')
     bgzip = luigi.Parameter(default='bgzip')
     tabix = luigi.Parameter(default='tabix')
     n_cpu = luigi.IntParameter(default=1)
@@ -276,12 +268,10 @@ class CreateRegionListBed(SagvcTask):
     priority = 70
 
     def output(self):
-        region_list = Path(self.region_list_path)
-        return [
-            luigi.LocalTarget(
-                region_list.parent.joinpath(region_list.stem + f'.bed{s}')
-            ) for s in ['.gz', '.gz.tbi', '']
-        ]
+        bed = Path(self.dest_dir_path).resolve().joinpath(
+            Path(self.region_list_path).stem + '.bed'
+        )
+        return [luigi.LocalTarget(f'{bed}{s}') for s in ['.gz', '.gz.tbi', '']]
 
     def run(self):
         region_list = Path(self.input().path)

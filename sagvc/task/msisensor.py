@@ -3,14 +3,11 @@
 from pathlib import Path
 
 import luigi
-from ftarc.task.resource import FetchReferenceFasta
 from ftarc.task.samtools import SamtoolsView
-from luigi.util import requires
 
 from .core import SagvcTask
 
 
-@requires(FetchReferenceFasta)
 class ScanMicrosatellites(SagvcTask):
     fa_path = luigi.Parameter()
     dest_dir_path = luigi.Parameter(default='.')
@@ -19,9 +16,10 @@ class ScanMicrosatellites(SagvcTask):
     priority = 60
 
     def output(self):
-        fa = Path(self.input()[0].path)
         return luigi.LocalTarget(
-            fa.parent.joinpath(f'{fa.stem}.microsatellites.tsv')
+            Path(self.dest_dir_path).resolve().joinpath(
+                Path(self.fa_path).stem + '.microsatellites.tsv'
+            )
         )
 
     def run(self):
@@ -30,7 +28,7 @@ class ScanMicrosatellites(SagvcTask):
         self.print_log(f'Scan microsatellites:\t{run_id}')
         output_tsv = Path(self.output().path)
         self.setup_shell(
-            run_id=run_id, commands=self.msisensor, cwd=self.dest_dir_path,
+            run_id=run_id, commands=self.msisensor, cwd=output_tsv.parent,
             **self.sh_config
         )
         self.run_shell(

@@ -1,127 +1,147 @@
 #!/usr/bin/env python
 
-import re
 import sys
 from pathlib import Path
-from socket import gethostname
 
 import luigi
-from ftarc.task.downloader import DownloadResourceFiles
-from ftarc.task.resource import FetchResourceVcf
+from ftarc.task.downloader import (DownloadAndIndexResourceVcfs,
+                                   DownloadResourceFiles)
+from ftarc.task.picard import CreateSequenceDictionary
+from ftarc.task.samtools import SamtoolsFaidx
+from luigi.util import requires
 
 from .cnvkit import CreateCnvAcccessBed
 from .core import SagvcTask
 from .msisensor import ScanMicrosatellites
-from .resource import (CreateBiallelicSnpVcf, CreateRegionListBed,
-                       CreateWgsIntervalListBeds)
+from .resource import CreateBiallelicSnpVcf, CreateWgsIntervalListBeds
 
 
-class DownloadAndProcessResourceFiles(luigi.Task):
-    src_urls = luigi.ListParameter()
+class DownloadAndProcessRegionFiles(luigi.Task):
+    src_url_dict = luigi.DictParameter()
     dest_dir_path = luigi.Parameter(default='.')
-    run_id = luigi.Parameter(default=gethostname())
-    wget = luigi.Parameter(default='wget')
     pigz = luigi.Parameter(default='pigz')
     pbzip2 = luigi.Parameter(default='pbzip2')
     samtools = luigi.Parameter(default='samtools')
+    gatk = luigi.Parameter(default='gatk')
     bgzip = luigi.Parameter(default='bgzip')
     tabix = luigi.Parameter(default='tabix')
-    gatk = luigi.Parameter(default='gatk')
     bedtools = luigi.Parameter(default='bedtools')
     cnvkitpy = luigi.Parameter(default='cnvkit.py')
     msisensor = luigi.Parameter(default='msisensor')
-    use_gnomad_v3 = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
-    priority = 10
+    priority = 80
 
     def requires(self):
         return [
-            DownloadGnomadVcfsAndExtractAf(
-                dest_dir_path=self.dest_dir_path,
-                use_gnomad_v3=self.use_gnomad_v3, wget=self.wget,
-                bgzip=self.bgzip, gatk=self.gatk, tabix=self.tabix,
-                n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-                sh_config=self.sh_config
+            DownloadAndIndexReferenceFasta(
+                src_url_dict=self.src_url_dict,
+                dest_dir_path=self.dest_dir_path, wget=self.wget,
+                pigz=self.pigz, pbzip2=self.pbzip2, bgzip=self.bgzip,
+                samtools=self.samtools, gatk=self.gatk, n_cpu=self.n_cpu,
+                memory_mb=self.memory_mb, sh_config=self.sh_config
             ),
-            DownloadResourceFiles(
-                src_urls=self.src_urls, dest_dir_path=self.dest_dir_path,
-                wget=self.wget, bgzip=self.bgzip, pbzip2=self.pbzip2,
-                pigz=self.pigz, n_cpu=self.n_cpu, sh_config=self.sh_config
+            DownloadAndIndexResourceVcfs(
+                src_urls=[
+                    self.src_url_dict['cnv_blacklist'],
+                    *[
+                        v for k, v in self.src_url_dict.items()
+                        if k not in {'ref_fa', 'ref_fa_alt', 'cnv_blacklist'}
+                    ]
+                ],
+                dest_dir_path=self.dest_dir_path, run_id='others',
+                wget=self.wget, pigz=self.pigz, pbzip2=self.pbzip2,
+                bgzip=self.bgzip, tabix=self.tabix, n_cpu=self.n_cpu,
+                sh_config=self.sh_config
             )
         ]
 
     def output(self):
-        for i in self.input()[0]:
-            yield luigi.LocalTarget(i.path)
-            yield luigi.LocalTarget(
-                re.sub(r'(vcf\.gz|vcf\.gz\.tbi)$', r'biallelic_snp.\1', i.path)
-            )
-        for i in self.input()[1]:
-            f = Path(i.path)
-            yield luigi.LocalTarget(f)
-            if f.name.endswith(('.fa', '.fna', '.fasta')):
-                for n in [f'{f.name}.fai', f'{f.stem}.dict',
-                          f'{f.stem}.wgs.interval_list',
-                          f'{f.stem}.wgs.bed.gz', f'{f.stem}.wgs.bed.gz.tbi',
-                          f'{f.stem}.wgs.bed', f'{f.stem}.wgs.excl.bed.gz',
-                          f'{f.stem}.wgs.excl.bed.gz.tbi',
-                          f'{f.stem}.wgs.excl.bed'
-                          ]:
-                    yield luigi.LocalTarget(f.parent.joinpath(n))
-            elif f.name.endswith('.vcf.gz'):
-                yield luigi.LocalTarget(f'{f}.tbi')
+        for t in self.input():
+            for i in t:
+                yield luigi.LocalTarget(i.path)
+        fa = Path(self.input()[0][0].path)
+        cnv_blacklist = Path(self.input()[1][0].path)
+        for n in [f'{fa.name}.fai', f'{fa.stem}.dict',
+                  f'{fa.stem}.wgs.interval_list', f'{fa.stem}.wgs.bed.gz',
+                  f'{fa.stem}.wgs.bed.gz.tbi', f'{fa.stem}.wgs.bed',
+                  f'{fa.stem}.wgs.excl.bed.gz',
+                  f'{fa.stem}.wgs.excl.bed.gz.tbi', f'{fa.stem}.wgs.excl.bed',
+                  f'{fa.stem}.not_in.{cnv_blacklist.stem}.access.bed',
+                  f'{fa.stem}.microsatellites.tsv']:
+            yield luigi.LocalTarget(fa.parent.joinpath(n))
 
     def run(self):
-        gnomad_vcf = Path(self.input()[0][0].path)
-        downloaded_file_paths = [i.path for i in self.input()[1]]
-        cnv_blacklist_path = [
-            p for p in downloaded_file_paths
-            if p.endswith('.list') and 'blacklist' in Path(p).stem
-        ][0]
-        fa_path = [
-            p for p in downloaded_file_paths
-            if p.endswith(('.fa', '.fna', '.fasta'))
-        ][0]
+        fa_path = self.input()[0][0].path
+        dest_dir_path = str(Path(fa_path).parent)
         yield [
-            CreateBiallelicSnpVcf(
-                input_vcf_path=str(gnomad_vcf), fa_path=fa_path,
-                dest_dir_path=self.dest_dir_path, pigz=self.pigz,
+            CreateWgsIntervalListBeds(
+                fa_path=fa_path, dest_dir_path=dest_dir_path, pigz=self.pigz,
                 pbzip2=self.pbzip2, samtools=self.samtools, gatk=self.gatk,
+                bedtools=self.bedtools, bgzip=self.bgzip, tabix=self.tabix,
                 n_cpu=self.n_cpu, memory_mb=self.memory_mb,
                 sh_config=self.sh_config
             ),
-            *[
-                FetchResourceVcf(
-                    src_path=p, bgzip=self.bgzip, tabix=self.tabix,
-                    n_cpu=self.n_cpu, sh_config=self.sh_config
-                ) for p in downloaded_file_paths if p.endswith('.vcf.gz')
-            ],
-            *[
-                CreateRegionListBed(
-                    region_list_path=p, bgzip=self.bgzip, tabix=self.tabix,
-                    n_cpu=self.n_cpu, sh_config=self.sh_config
-                ) for p in downloaded_file_paths if p.endswith('.list')
-            ],
-            CreateWgsIntervalListBeds(
-                fa_path=fa_path, dest_dir_path=self.dest_dir_path,
-                pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
-                gatk=self.gatk, bedtools=self.bedtools, bgzip=self.bgzip,
-                tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-                sh_config=self.sh_config
-            ),
             CreateCnvAcccessBed(
-                fa_path=fa_path, cnv_blacklist_path=cnv_blacklist_path,
-                dest_dir_path=self.dest_dir_path, cnvkitpy=self.cnvkitpy,
+                fa_path=fa_path, cnv_blacklist_path=self.input()[1][0].path,
+                dest_dir_path=dest_dir_path, cnvkitpy=self.cnvkitpy,
                 pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
                 gatk=self.gatk, bgzip=self.bgzip, tabix=self.tabix,
                 n_cpu=self.n_cpu, memory_mb=self.memory_mb,
                 sh_config=self.sh_config
             ),
             ScanMicrosatellites(
-                fa_path=fa_path, dest_dir_path=self.dest_dir_path,
+                fa_path=fa_path, dest_dir_path=dest_dir_path,
                 msisensor=self.msisensor, sh_config=self.sh_config
+            )
+        ]
+
+
+class DownloadAndIndexReferenceFasta(luigi.Task):
+    src_url_dict = luigi.DictParameter()
+    dest_dir_path = luigi.Parameter(default='.')
+    wget = luigi.Parameter(default='wget')
+    pigz = luigi.Parameter(default='pigz')
+    pbzip2 = luigi.Parameter(default='pbzip2')
+    bgzip = luigi.Parameter(default='bgzip')
+    samtools = luigi.Parameter(default='samtools')
+    gatk = luigi.Parameter(default='gatk')
+    n_cpu = luigi.IntParameter(default=1)
+    memory_mb = luigi.FloatParameter(default=4096)
+    sh_config = luigi.DictParameter(default=dict())
+    priority = 10
+
+    def requires(self):
+        return DownloadResourceFiles(
+            src_urls=[
+                self.src_url_dict['ref_fa'],
+                self.src_url_dict['ref_fa_alt']
+            ],
+            dest_dir_path=self.dest_dir_path,
+            run_id=Path(self.src_url_dict['ref_fa']).stem, wget=self.wget,
+            pigz=self.pigz, pbzip2=self.pbzip2, bgzip=self.bgzip,
+            n_cpu=self.n_cpu, sh_config=self.sh_config
+        )
+
+    def output(self):
+        for i in self.input():
+            fa = Path(i.path)
+            yield luigi.LocalTarget(fa)
+            if fa.name.endswith(('.fa', '.fna', '.fasta')):
+                for p in [f'{fa}.fai', fa.parent.joinpath(f'{fa.stem}.dict')]:
+                    yield luigi.LocalTarget(p)
+
+    def run(self):
+        fa_path = self.input()[0].path
+        yield [
+            SamtoolsFaidx(
+                fa_path=fa_path, samtools=self.samtools,
+                sh_config=self.sh_config
+            ),
+            CreateSequenceDictionary(
+                fa_path=fa_path, gatk=self.gatk, n_cpu=self.n_cpu,
+                memory_mb=self.memory_mb, sh_config=self.sh_config
             )
         ]
 
@@ -137,7 +157,7 @@ class DownloadGnomadVcfsAndExtractAf(SagvcTask):
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
-    priority = 10
+    priority = 100
 
     def output(self):
         output_vcf = Path(self.dest_dir_path).resolve().joinpath(
@@ -203,6 +223,47 @@ class DownloadGnomadVcfsAndExtractAf(SagvcTask):
                 input_vcf_paths=vcf_dict.values(), output_vcf_path=output_vcf,
                 picard=self.gatk, remove_input=True
             )
+
+
+@requires(DownloadGnomadVcfsAndExtractAf, DownloadAndIndexReferenceFasta)
+class DownloadAndProcessGnomadVcf(luigi.Task):
+    dest_dir_path = luigi.Parameter(default='.')
+    pigz = luigi.Parameter(default='pigz')
+    pbzip2 = luigi.Parameter(default='pbzip2')
+    samtools = luigi.Parameter(default='samtools')
+    gatk = luigi.Parameter(default='gatk')
+    n_cpu = luigi.IntParameter(default=1)
+    memory_mb = luigi.FloatParameter(default=4096)
+    sh_config = luigi.DictParameter(default=dict())
+    priority = 90
+
+    def output(self):
+        biallelic_snp_vcf = Path(self.dest_dir_path).resolve().joinpath(
+            Path(Path(self.input()[0][0].path).stem).stem
+            + '.biallelic_snp.vcf.gz'
+        )
+        for s in ['', '.tbi']:
+            yield luigi.LocalTarget(f'{biallelic_snp_vcf}{s}')
+        for t in self.input():
+            for i in t:
+                yield luigi.LocalTarget(i.path)
+
+    def run(self):
+        yield CreateBiallelicSnpVcf(
+            input_vcf_path=self.input()[0].path, fa_path=self.input()[1].path,
+            dest_dir_path=self.dest_dir_path, pigz=self.pigz,
+            pbzip2=self.pbzip2, gatk=self.gatk, samtools=self.samtools,
+            n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+            sh_config=self.sh_config
+        )
+
+
+@requires(DownloadAndProcessGnomadVcf,  DownloadAndProcessRegionFiles)
+class DownloadAndProcessResourceFiles(luigi.WrapperTask):
+    priority = 10
+
+    def output(self):
+        return self.input()
 
 
 class WritePassingAfOnlyVcf(SagvcTask):
