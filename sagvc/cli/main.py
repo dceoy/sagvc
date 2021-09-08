@@ -117,12 +117,10 @@ def main():
         build_luigi_tasks(
             tasks=[
                 DownloadAndProcessResourceFiles(
-                    src_urls=list(
-                        read_yml(
-                            path=Path(__file__).parent.parent.joinpath(
-                                'static/urls.yml'
-                            )
-                        ).values()
+                    src_url_dict=read_yml(
+                        path=Path(__file__).parent.parent.joinpath(
+                            'static/urls.yml'
+                        )
                     ),
                     dest_dir_path=args['--dest-dir'],
                     **{

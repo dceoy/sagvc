@@ -19,6 +19,7 @@ from .resource import CreateBiallelicSnpVcf, CreateWgsIntervalListBeds
 class DownloadAndProcessRegionFiles(luigi.Task):
     src_url_dict = luigi.DictParameter()
     dest_dir_path = luigi.Parameter(default='.')
+    wget = luigi.Parameter(default='wget')
     pigz = luigi.Parameter(default='pigz')
     pbzip2 = luigi.Parameter(default='pbzip2')
     samtools = luigi.Parameter(default='samtools')
@@ -58,19 +59,22 @@ class DownloadAndProcessRegionFiles(luigi.Task):
         ]
 
     def output(self):
-        for t in self.input():
-            for i in t:
-                yield luigi.LocalTarget(i.path)
         fa = Path(self.input()[0][0].path)
         cnv_blacklist = Path(self.input()[1][0].path)
-        for n in [f'{fa.name}.fai', f'{fa.stem}.dict',
-                  f'{fa.stem}.wgs.interval_list', f'{fa.stem}.wgs.bed.gz',
-                  f'{fa.stem}.wgs.bed.gz.tbi', f'{fa.stem}.wgs.bed',
-                  f'{fa.stem}.wgs.excl.bed.gz',
-                  f'{fa.stem}.wgs.excl.bed.gz.tbi', f'{fa.stem}.wgs.excl.bed',
-                  f'{fa.stem}.not_in.{cnv_blacklist.stem}.access.bed',
-                  f'{fa.stem}.microsatellites.tsv']:
-            yield luigi.LocalTarget(fa.parent.joinpath(n))
+        return (
+            self.input()[0] + self.input()[1] + [
+                luigi.LocalTarget(fa.parent.joinpath(n)) for n in [
+                    f'{fa.name}.fai', f'{fa.stem}.dict',
+                    f'{fa.stem}.wgs.interval_list', f'{fa.stem}.wgs.bed.gz',
+                    f'{fa.stem}.wgs.bed.gz.tbi', f'{fa.stem}.wgs.bed',
+                    f'{fa.stem}.wgs.excl.bed.gz',
+                    f'{fa.stem}.wgs.excl.bed.gz.tbi',
+                    f'{fa.stem}.wgs.excl.bed',
+                    f'{fa.stem}.not_in.{cnv_blacklist.stem}.access.bed',
+                    f'{fa.stem}.microsatellites.tsv'
+                ]
+            ]
+        )
 
     def run(self):
         fa_path = self.input()[0][0].path
@@ -125,12 +129,10 @@ class DownloadAndIndexReferenceFasta(luigi.Task):
         )
 
     def output(self):
-        for i in self.input():
-            fa = Path(i.path)
-            yield luigi.LocalTarget(fa)
-            if fa.name.endswith(('.fa', '.fna', '.fasta')):
-                for p in [f'{fa}.fai', fa.parent.joinpath(f'{fa.stem}.dict')]:
-                    yield luigi.LocalTarget(p)
+        fa = Path(self.input()[0].path)
+        return (
+            self.input() + [f'{fa}.fai', fa.parent.joinpath(f'{fa.stem}.dict')]
+        )
 
     def run(self):
         fa_path = self.input()[0].path
@@ -238,15 +240,14 @@ class DownloadAndProcessGnomadVcf(luigi.Task):
     priority = 90
 
     def output(self):
-        biallelic_snp_vcf = Path(self.dest_dir_path).resolve().joinpath(
+        ba_snp_vcf = Path(self.dest_dir_path).resolve().joinpath(
             Path(Path(self.input()[0][0].path).stem).stem
             + '.biallelic_snp.vcf.gz'
         )
-        for s in ['', '.tbi']:
-            yield luigi.LocalTarget(f'{biallelic_snp_vcf}{s}')
-        for t in self.input():
-            for i in t:
-                yield luigi.LocalTarget(i.path)
+        return (
+            self.input()[0] + self.input()[1]
+            + [luigi.LocalTarget(f'{ba_snp_vcf}{s}') for s in ['', '.tbi']]
+        )
 
     def run(self):
         yield CreateBiallelicSnpVcf(
