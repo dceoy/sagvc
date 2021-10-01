@@ -130,9 +130,10 @@ class DownloadAndIndexReferenceFasta(luigi.Task):
 
     def output(self):
         fa = Path(self.input()[0].path)
-        return (
-            self.input() + [f'{fa}.fai', fa.parent.joinpath(f'{fa.stem}.dict')]
-        )
+        return [
+            *self.input(), luigi.LocalTarget(f'{fa}.fai'),
+            luigi.LocalTarget(fa.parent.joinpath(f'{fa.stem}.dict'))
+        ]
 
     def run(self):
         fa_path = self.input()[0].path
@@ -251,10 +252,10 @@ class DownloadAndProcessGnomadVcf(luigi.Task):
 
     def run(self):
         yield CreateBiallelicSnpVcf(
-            input_vcf_path=self.input()[0].path, fa_path=self.input()[1].path,
-            dest_dir_path=self.dest_dir_path, pigz=self.pigz,
-            pbzip2=self.pbzip2, gatk=self.gatk, samtools=self.samtools,
-            n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+            input_vcf_path=self.input()[0][0].path,
+            fa_path=self.input()[1][0].path, dest_dir_path=self.dest_dir_path,
+            pigz=self.pigz, pbzip2=self.pbzip2, gatk=self.gatk,
+            samtools=self.samtools, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
             sh_config=self.sh_config
         )
 

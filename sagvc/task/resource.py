@@ -30,8 +30,8 @@ class CreateBiallelicSnpVcf(SagvcTask):
     def run(self):
         run_id = Path(self.input_vcf_path).stem
         self.print_log(f'Create a common biallelic SNP VCF:\t{run_id}')
-        input_vcf = Path(self.input_vcf_path).resource()
-        fa = Path(self.fa_path).resource()
+        input_vcf = Path(self.input_vcf_path).resolve()
+        fa = Path(self.fa_path).resolve()
         biallelic_snp_vcf = Path(self.output()[0].path)
         self.setup_shell(
             run_id=run_id, commands=self.gatk, cwd=biallelic_snp_vcf.parent,
@@ -79,9 +79,9 @@ class CreateWgsIntervalList(SagvcTask):
         fa = Path(self.fa_path).resolve()
         run_id = fa.stem
         self.print_log(f'Create a WGS interval list:\t{run_id}')
-        output_interval = Path(self.output().path)
-        dest_dir = output_interval.parent
-        raw_interval = dest_dir.joinpath(f'{fa.stem}.raw.interval_list')
+        output_interval_list = Path(self.output().path)
+        dest_dir = output_interval_list.parent
+        raw_interval_list = dest_dir.joinpath(f'{fa.stem}.raw.interval_list')
         self.setup_shell(
             run_id=run_id, commands=self.gatk, cwd=dest_dir, **self.sh_config,
             env={'JAVA_TOOL_OPTIONS': '-Xmx{}m'.format(int(self.memory_mb))}
@@ -91,20 +91,20 @@ class CreateWgsIntervalList(SagvcTask):
                 f'set -e && {self.gatk} ScatterIntervalsByNs'
                 + f' --REFERENCE {fa}'
                 + ' --OUTPUT_TYPE ACGT'
-                + f' --OUTPUT {raw_interval}'
+                + f' --OUTPUT {raw_interval_list}'
             ),
-            input_files_or_dirs=fa, output_files_or_dirs=raw_interval
+            input_files_or_dirs=fa, output_files_or_dirs=raw_interval_list
         )
         self.run_shell(
             args=(
                 'set -e && grep'
                 + ' -e \'^@\' -e \'^chr[0-9XYM]\\+\\s\''
-                + f' {raw_interval} > {output_interval}'
+                + f' {raw_interval_list} > {output_interval_list}'
             ),
-            input_files_or_dirs=raw_interval,
-            output_files_or_dirs=output_interval
+            input_files_or_dirs=raw_interval_list,
+            output_files_or_dirs=output_interval_list
         )
-        self.remove_files_and_dirs(raw_interval)
+        self.remove_files_and_dirs(raw_interval_list)
 
 
 @requires(CreateWgsIntervalList)
@@ -136,7 +136,7 @@ class CreateWgsIntervalListBeds(SagvcTask):
 
     def run(self):
         yield [
-            CreateExclusionIntervalListBed(
+            CreateIntervalListBed(
                 interval_list_path=self.input().path,
                 dest_dir_path=self.dest_dir_path, bgzip=self.bgzip,
                 tabix=self.tabix, n_cpu=self.n_cpu, sh_config=self.sh_config
@@ -163,14 +163,14 @@ class CreateIntervalListBed(SagvcTask):
 
     def output(self):
         bed = Path(self.dest_dir_path).resolve().joinpath(
-            Path(self.input().path).stem + '.bed'
+            Path(self.interval_list_path).stem + '.bed'
         )
         return [luigi.LocalTarget(f'{bed}{s}') for s in ['.gz', '.gz.tbi', '']]
 
     def run(self):
-        run_id = Path(self.input().path).stem
+        run_id = Path(self.interval_list_path).stem
         self.print_log(f'Create an interval_list BED:\t{run_id}')
-        interval_list = Path(self.input().path).resolve()
+        interval_list = Path(self.interval_list_path).resolve()
         bed_gz = Path(self.output()[0].path)
         bed = Path(self.output()[2].path)
         pyscript = Path(__file__).resolve().parent.parent.joinpath(
@@ -274,9 +274,9 @@ class CreateRegionListBed(SagvcTask):
         return [luigi.LocalTarget(f'{bed}{s}') for s in ['.gz', '.gz.tbi', '']]
 
     def run(self):
-        region_list = Path(self.input().path)
-        run_id = region_list.stem
+        run_id = Path(self.region_list_path).stem
         self.print_log(f'Create a region list BED:\t{run_id}')
+        region_list = Path(self.region_list_path).resolve()
         bed_gz = Path(self.output()[0].path)
         bed = Path(self.output()[2].path)
         self.setup_shell(
@@ -375,6 +375,60 @@ class DecompressBgzipFile(SagvcTask):
                 + f' > {output_file}'
             ),
             input_files_or_dirs=bgz, output_files_or_dirs=output_file
+        )
+
+
+class SplitIntervals(SagvcTask):
+    fa_path = luigi.Parameter()
+    interval_list_path = luigi.Parameter()
+    dest_dir_path = luigi.Parameter(default='.')
+    scatter_count = luigi.IntParameter(default=1)
+    gatk = luigi.Parameter(default='gatk')
+    n_cpu = luigi.IntParameter(default=1)
+    memory_mb = luigi.FloatParameter(default=4096)
+    sh_config = luigi.DictParameter(default=dict())
+    priority = 50
+
+    def output(self):
+        input_interval_list = Path(self.dest_dir_path)
+        if self.scatter_count > 1:
+            run_dir = Path(self.dest_dir_path).resolve().joinpath(
+                f'{input_interval_list.stem}.split_in_{self.scatter_count}'
+            )
+            return [
+                luigi.LocalTarget(
+                    run_dir.joinpath(f'{i:04d}-scattered.interval_list')
+                ) for i in range(self.scatter_count)
+            ]
+        else:
+            return [luigi.LocalTarget(input_interval_list.resolve())]
+
+    def run(self):
+        input_interval = Path(self.input()[0].path)
+        run_id = input_interval.stem
+        output_intervals = [Path(o.path) for o in self.output()]
+        scatter_count = len(output_intervals)
+        self.print_log(f'Split an interval list in {scatter_count}:\t{run_id}')
+        fa = Path(self.input()[1][0].path)
+        run_dir = output_intervals[0].parent
+        self.setup_shell(
+            run_id=run_id, commands=self.gatk, cwd=run_dir, **self.sh_config,
+            env={
+                'JAVA_TOOL_OPTIONS': self.generate_gatk_java_options(
+                    n_cpu=self.n_cpu, memory_mb=self.memory_mb
+                )
+            }
+        )
+        self.run_shell(
+            args=(
+                f'set -e && {self.gatk} SplitIntervals'
+                + f' --reference {fa}'
+                + f' --intervals {input_interval}'
+                + f' --scatter-count {scatter_count}'
+                + f' --output {run_dir}'
+            ),
+            input_files_or_dirs=[input_interval, fa],
+            output_files_or_dirs=[*output_intervals, run_dir]
         )
 
 

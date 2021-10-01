@@ -16,11 +16,11 @@ class SagvcTask(ShellTask):
             n = Path(c).name
             if n in {'java', 'snpEff'} or n.endswith('.jar'):
                 yield f'{c} -version'
-            elif n == 'bwa':
+            elif n in {'bwa', 'msisensor'}:
                 yield f'{c} 2>&1 | grep -e "Program:" -e "Version:"'
             elif n == 'wget':
                 yield f'{c} --version | head -1'
-            elif n == 'bwa-mem2':
+            elif n in {'bwa-mem2', 'cnvkit.py'}:
                 yield f'{c} version'
             elif n == 'picard':
                 yield f'{c} CreateSequenceDictionary --version'

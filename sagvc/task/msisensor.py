@@ -23,7 +23,7 @@ class ScanMicrosatellites(SagvcTask):
         )
 
     def run(self):
-        fa = Path(self.input()[0].path)
+        fa = Path(self.fa_path)
         run_id = fa.stem
         self.print_log(f'Scan microsatellites:\t{run_id}')
         output_tsv = Path(self.output().path)
@@ -51,22 +51,23 @@ class ScoreMsiWithMsisensor(SagvcTask):
     priority = 20
 
     def output(self):
-        dest_dir = Path(self.dest_dir_path).resolve()
-        output_tsv_name = '{}.msisensor.tsv'.format(
+        run_dir = Path(self.dest_dir_path).resolve().joinpath(
             self.create_matched_id(self.tumor_cram_path, self.normal_cram_path)
         )
         return [
-            luigi.LocalTarget(dest_dir.joinpath(output_tsv_name + s))
-            for s in ['', '_dis', '_germline', '_somatic']
+            luigi.LocalTarget(
+                run_dir.joinpath(f'{run_dir.name}.msisensor.tsv{s}')
+            ) for s in ['', '_dis', '_germline', '_somatic']
         ]
 
     def run(self):
-        dest_dir = Path(self.dest_dir_path).resolve()
+        output_files = [Path(i.path) for i in self.output()]
+        run_dir = output_files[0].parent
         crams = [
             Path(p) for p in [self.tumor_cram_path, self.normal_cram_path]
         ]
         bams = [
-            (c if c.suffix == '.bam' else dest_dir.joinpath(f'{c.stem}.bam'))
+            (c if c.suffix == '.bam' else run_dir.joinpath(f'{c.stem}.bam'))
             for c in crams
         ]
         tmp_target = yield [
@@ -76,13 +77,12 @@ class ScoreMsiWithMsisensor(SagvcTask):
                 remove_input=False, index_sam=True, sh_config=self.sh_config
             ) for c, b in zip(crams, bams) if c != b
         ]
-        output_files = [Path(i.path) for i in self.output()]
         run_id = Path(output_files[0].stem).stem
         self.print_log(f'Score MSI with MSIsensor:\t{run_id}')
         microsatellites_tsv = Path(self.microsatellites_tsv_path).resource()
         bed = (Path(self.bed_path).resource() if self.bed_path else None)
         self.setup_shell(
-            run_id=run_id, commands=self.msisensor, cwd=dest_dir,
+            run_id=run_id, commands=self.msisensor, cwd=run_dir,
             **self.sh_config
         )
         self.run_shell(
@@ -97,7 +97,7 @@ class ScoreMsiWithMsisensor(SagvcTask):
                 *bams, microsatellites_tsv,
                 *([bed] if bed else list())
             ],
-            output_files_or_dirs=output_files
+            output_files_or_dirs=[*output_files, run_dir]
         )
         for t in tmp_target:
             self.remove_files_and_dirs(*[i.path for i in t])

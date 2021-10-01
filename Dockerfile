@@ -123,5 +123,6 @@ ENV JAVA_LIBRARY_PATH /usr/lib/jni
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
 ENV CLASSPATH /opt/gatk/gatk.jar:${CLASSPATH}
 ENV PATH /opt/gatk/bin:/opt/conda/envs/gatk/bin:/opt/conda/bin:${PATH}
+ENV MPLCONFIGDIR /tmp/cnvkit
 
 ENTRYPOINT ["/opt/conda/bin/sagvc"]

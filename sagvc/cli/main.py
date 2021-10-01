@@ -76,7 +76,7 @@ from pathlib import Path
 
 from docopt import docopt
 from ftarc.cli.util import (build_luigi_tasks, fetch_executable, print_log,
-                            read_yml)
+                            print_yml, read_yml)
 from psutil import cpu_count, virtual_memory
 
 from .. import __version__
@@ -107,6 +107,10 @@ def main():
     memory_mb_per_worker = ceil(
         virtual_memory().total / 1024 / 1024 / 2 / n_worker
     )
+    print_yml([
+        {'n_worker': n_worker}, {'n_cpu_per_worker': n_cpu_per_worker},
+        {'memory_mb_per_worker': memory_mb_per_worker}
+    ])
     sh_config = {
         'log_dir_path': args['--dest-dir'],
         'remove_if_failed': (not args['--skip-cleaning']),
