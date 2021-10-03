@@ -81,8 +81,6 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
     samtools = luigi.Parameter(default='samtools')
     rscript = luigi.Parameter(default='Rscript')
     seq_method = luigi.Parameter(default='wgs')
-    segment_method = luigi.Parameter(default='cbs')
-    segment_threshold = luigi.Parameter(default=1e-6)
     n_cpu = luigi.IntParameter(default=1)
     sh_config = luigi.DictParameter(default=dict())
     priority = 20
@@ -98,8 +96,10 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
             luigi.LocalTarget(run_dir.joinpath(n)) for n in (
                 [
                     (tumor_stem + s) for s in [
-                        '.seg', '.cns', '.cnr', '.targetcoverage.cnn',
-                        '.antitargetcoverage.cnn'
+                        '.call.seg', '.call.cns', '.bintest.cns', '.cns',
+                        '.cnr', '.targetcoverage.cnn',
+                        '.antitargetcoverage.cnn', '-diagram.pdf',
+                        '-scatter.png'
                     ]
                 ] + [
                     (normal_stem + s) for s in [
@@ -126,10 +126,9 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
         refflat_txt = Path(self.refflat_txt_path).resolve()
         output_files = [Path(o.path) for o in self.output()]
         run_dir = output_files[0].parent
-        output_cnr = run_dir.joinpath(f'{output_files[0].stem}.cnr')
         output_ref_cnn = run_dir.joinpath(f'{normal_cram.stem}.reference.cnn')
-        output_cns = run_dir.joinpath(f'{output_files[0].stem}.cns')
-        output_seg = run_dir.joinpath(f'{output_files[0].stem}.seg')
+        output_seg = output_files[0]
+        output_cns = output_files[1]
         self.setup_shell(
             run_id=run_id,
             commands=[self.cnvkitpy, self.samtools, self.rscript], cwd=run_dir,
@@ -152,19 +151,7 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
             input_files_or_dirs=[
                 tumor_cram, normal_cram, fa, access_bed, refflat_txt
             ],
-            output_files_or_dirs=[*output_files[2:], run_dir]
-        )
-        self.run_shell(
-            args=(
-                f'set -e && {self.cnvkitpy} segment'
-                + f' --method={self.segment_method}'
-                + f' --threshold={self.segment_threshold}'
-                + f' --processes={self.n_cpu}'
-                + f' --output={output_cns}'
-                + f' {output_cnr}'
-            ),
-            input_files_or_dirs=output_cns,
-            output_files_or_dirs=output_cnr
+            output_files_or_dirs=[*output_files[1:], run_dir]
         )
         self.run_shell(
             args=(
