@@ -11,12 +11,16 @@ Usage:
     sagvc haplotypecaller [--debug|--info] [--cpus=<int>] [--workers=<int>]
         [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
         [--interval-list=<path>|--bed=<path>] <fa_path> <dbsnp_vcf_path>
-        <sam_path>...
+        <normal_sam_path>
     sagvc mutect2 [--debug|--info] [--cpus=<int>] [--workers=<int>]
         [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
         [--interval-list=<path>|--bed=<path>] [--tumor-sample=<name>]
         [--normal-sample=<name>] <fa_path> <germline_resource_vcf_path>
-        <sam_path>...
+        <tumor_sam_path> <normal_sam_path>
+    sagvc delly [--debug|--info] [--cpus=<int>] [--workers=<int>]
+        [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
+        [--excl-bed=<path>] [--tumor-sample=<name>] [--normal-sample=<name>]
+        <fa_path> <tumor_sam_path> <normal_sam_path>
     sagvc cnvkit [--debug|--info] [--cpus=<int>] [--workers=<int>]
         [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
         [--seq-method=<type>] [--access-bed=<path>] [--refflat-txt=<path>]
@@ -33,6 +37,7 @@ Commands:
     write-af-only-vcf       Extract and write only AF from VCF INFO
     haplotypecaller         Call germline short variants using GATK
     mutect2                 Call somatic short variants using GATK
+    delly                   Call somatic structural variants using Delly
     cnvkit                  Call somatic CNV using CNVkit
     msisensor               Evaluate MSI using MSIsensor
 
@@ -63,7 +68,6 @@ Args:
     <dbsnp_vcf_path>        Path to a dbSNP VCF file
     <germline_resource_vcf_path>
                             Path to a germline resource VCF file
-    <sam_path>              Path to a sorted CRAM or BAM file
     <tumor_sam_path>        Path to a tumor CRAM file
     <normal_sam_path>       Path to a normal CRAM file
     <ms_tsv_path>           Path to a microsatellites TSV file
@@ -165,6 +169,8 @@ def main():
         pass
     elif args['mutect2']:
         pass
+    elif args['delly']:
+        pass
     elif args['cnvkit']:
         build_luigi_tasks(
             tasks=[
@@ -172,8 +178,8 @@ def main():
                     tumor_cram_path=args['<tumor_sam_path>'],
                     normal_cram_path=args['<normal_sam_path>'],
                     fa_path=args['<fa_path>'],
-                    refflat_txt_path=args['--refflat-txt'],
-                    access_bed_path=args['--access-bed'],
+                    access_bed_path=(args['--access-bed'] or ''),
+                    refflat_txt_path=(args['--refflat-txt'] or ''),
                     dest_dir_path=args['--dest-dir'],
                     cnvkitpy=fetch_executable('cnvkit.py'),
                     samtools=fetch_executable('samtools'),
