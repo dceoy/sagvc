@@ -8,27 +8,27 @@ Usage:
         [--use-msisensor-pro] [--dest-dir=<path>]
     sagvc write-af-only-vcf [--debug|--info] [--cpus=<int>]
         [--src-path=<path>|--src-url=<url>] [--dest-dir=<path>]
-    sagvc haplotypecaller [--debug|--info] [--cpus=<int>] [--workers=<int>]
-        [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
+    sagvc haplotypecaller [--debug|--info] [--cpus=<int>] [--skip-cleaning]
+        [--print-subprocesses] [--dest-dir=<path>]
         [--interval-list=<path>|--bed=<path>] <fa_path> <dbsnp_vcf_path>
         <normal_sam_path>
-    sagvc mutect2 [--debug|--info] [--cpus=<int>] [--workers=<int>]
-        [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
+    sagvc mutect2 [--debug|--info] [--cpus=<int>] [--skip-cleaning]
+        [--print-subprocesses] [--dest-dir=<path>]
         [--interval-list=<path>|--bed=<path>] [--tumor-sample=<name>]
         [--normal-sample=<name>] <fa_path> <germline_resource_vcf_path>
         <tumor_sam_path> <normal_sam_path>
-    sagvc delly [--debug|--info] [--cpus=<int>] [--workers=<int>]
-        [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
-        [--excl-bed=<path>] [--tumor-sample=<name>] [--normal-sample=<name>]
-        <fa_path> <tumor_sam_path> <normal_sam_path>
-    sagvc cnvkit [--debug|--info] [--cpus=<int>] [--workers=<int>]
-        [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
-        [--seq-method=<type>] [--access-bed=<path>] [--refflat-txt=<path>]
-        <fa_path> <tumor_sam_path> <normal_sam_path>
-    sagvc msisensor [--debug|--info] [--cpus=<int>] [--workers=<int>]
-        [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
-        [--use-msisensor-pro] [--bed=<path>] <fa_path>
-        <microsatellites_tsv_path> <tumor_sam_path> <normal_sam_path>
+    sagvc delly [--debug|--info] [--cpus=<int>] [--skip-cleaning]
+        [--print-subprocesses] [--dest-dir=<path>] [--excl-bed=<path>]
+        [--tumor-sample=<name>] [--normal-sample=<name>] <fa_path>
+        <tumor_sam_path> <normal_sam_path>
+    sagvc cnvkit [--debug|--info] [--cpus=<int>] [--skip-cleaning]
+        [--print-subprocesses] [--dest-dir=<path>] [--seq-method=<type>]
+        [--access-bed=<path>] [--refflat-txt=<path>] <fa_path> <tumor_sam_path>
+        <normal_sam_path>
+    sagvc msisensor [--debug|--info] [--cpus=<int>] [--skip-cleaning]
+        [--print-subprocesses] [--dest-dir=<path>] [--use-msisensor-pro]
+        [--bed=<path>] <fa_path> <microsatellites_tsv_path> <tumor_sam_path>
+        <normal_sam_path>
     sagvc -h|--help
     sagvc --version
 
@@ -56,6 +56,7 @@ Options:
     --src-url=<url>         Specify a source URL
     --interval-list=<path>, --bed=<path>
                             Specify a path to an interval_list or BED
+    --excl-bed=<path>       Specify a path to an exclusion BED
     --tumor-sample=<name>   Specify a tumor sample name
     --normal-sample=<name>  Specify a normal sample name
     --seq-method=<type>     Specify a sequencing assay type [default: wgs]
@@ -85,6 +86,7 @@ from psutil import cpu_count, virtual_memory
 
 from .. import __version__
 from ..task.cnvkit import CallSomaticCnvWithCnvkit
+from ..task.delly import CallSomaticStructualVariantsWithDelly
 from ..task.downloader import (DownloadAndProcessResourceFiles,
                                WritePassingAfOnlyVcf)
 from ..task.msisensor import ScoreMsiWithMsisensor
@@ -106,7 +108,10 @@ def main():
     logger.debug(f'args:{os.linesep}{args}')
     print_log(f'Start the workflow of sagvc {__version__}')
     n_cpu = int(args['--cpus'] or cpu_count())
-    n_worker = min(int(args['--workers'] or 1), n_cpu)
+    n_worker = int(
+        args['--workers']
+        or (n_cpu if args['haplotypecaller'] or args['mutect2'] else 1)
+    )
     n_cpu_per_worker = max(floor(n_cpu / n_worker), 1)
     memory_mb_per_worker = ceil(
         virtual_memory().total / 1024 / 1024 / 2 / n_worker
@@ -170,7 +175,24 @@ def main():
     elif args['mutect2']:
         pass
     elif args['delly']:
-        pass
+        build_luigi_tasks(
+            tasks=[
+                CallSomaticStructualVariantsWithDelly(
+                    tumor_cram_path=args['<tumor_sam_path>'],
+                    normal_cram_path=args['<normal_sam_path>'],
+                    fa_path=args['<fa_path>'],
+                    tumor_sample_name=args['--tumor-sample'],
+                    normal_sample_name=args['--normal-sample'],
+                    excl_bed_path=(args['--excl-bed'] or ''),
+                    dest_dir_path=args['--dest-dir'],
+                    delly=fetch_executable('delly'),
+                    bcftools=fetch_executable('bcftools'),
+                    n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
+                    sh_config=sh_config
+                )
+            ],
+            workers=n_worker, log_level=log_level
+        )
     elif args['cnvkit']:
         build_luigi_tasks(
             tasks=[
