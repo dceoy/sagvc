@@ -14,7 +14,8 @@ Usage:
         (--resource-vcf=<path>) <fa_path> <normal_sam_path>
     sagvc mutect2 [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>]
-        [--interval-list=<path>|--bed=<path>] (--germline-resource-vcf=<path>)
+        [--interval-list=<path>|--bed=<path>]
+        [--biallelic-snp-vcf==<path>] [--germline-resource-vcf=<path>]
         [--tumor-sample=<name>] [--normal-sample=<name>] <fa_path>
         <tumor_sam_path> <normal_sam_path>
     sagvc delly [--debug|--info] [--cpus=<int>] [--skip-cleaning]
@@ -58,6 +59,8 @@ Options:
                             Specify a path to an interval_list or BED
     --dbsnp-vcf=<path>      Specify a path to a dbSNP VCF file
     --resource-vcf=<path>   Specify a path to a known SNP and INDEL VCF file
+    --biallelic-snp-vcf=<path>
+                            Specify a path to a common biallelic SNP VCF file
     --germline-resource-vcf=<path>
                             Specify a path to a germline population VCF file
     --excl-bed=<path>       Specify a path to an exclusion BED
@@ -93,6 +96,7 @@ from ..task.downloader import (DownloadAndProcessResourceFiles,
                                WritePassingAfOnlyVcf)
 from ..task.haplotypecaller import FilterVariantTranches
 from ..task.msisensor import ScoreMsiWithMsisensor
+from ..task.mutect2 import FilterMutectCalls
 
 
 def main():
@@ -174,7 +178,8 @@ def main():
             log_level=log_level
         )
     elif args['haplotypecaller']:
-        assert bool(args['--resource-vcf']), '--resource-vcf required'
+        for k in ['--resource-vcf', '--dbsnp-vcf']:
+            assert bool(args[k]), f'{k} required'
         build_luigi_tasks(
             tasks=[
                 FilterVariantTranches(
@@ -197,7 +202,32 @@ def main():
             workers=n_worker, log_level=log_level
         )
     elif args['mutect2']:
-        pass
+        for k in ['--biallelic-snp-vcf', '--germline-resource-vcf']:
+            assert bool(args[k]), f'{k} required'
+        build_luigi_tasks(
+            tasks=[
+                FilterMutectCalls(
+                    tumor_cram_path=args['<tumor_sam_path>'],
+                    normal_cram_path=args['<normal_sam_path>'],
+                    fa_path=args['<fa_path>'],
+                    tumor_sample_name=args['--tumor-sample'],
+                    normal_sample_name=args['--normal-sample'],
+                    common_biallelic_snp_vcf_path=args['--biallelic-snp-vcf'],
+                    germline_resource_vcf_path=args['--germline-resource-vcf'],
+                    dest_dir_path=args['--dest-dir'],
+                    gatk=fetch_executable('gatk'),
+                    samtools=fetch_executable('samtools'),
+                    save_memory=(memory_mb_per_worker < 8192),
+                    n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
+                    sh_config=sh_config,
+                    interval_list_path=(
+                        args['--interval-list'] or args['--bed'] or ''
+                    ),
+                    scatter_count=n_cpu
+                )
+            ],
+            workers=n_worker, log_level=log_level
+        )
     elif args['delly']:
         build_luigi_tasks(
             tasks=[

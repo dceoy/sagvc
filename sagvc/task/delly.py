@@ -40,9 +40,14 @@ class CallSomaticStructualVariantsWithDelly(SagvcTask):
         run_dir = output_vcf.parent
         run_id = run_dir.name
         self.print_log(f'Call somatic SVs with Delly:\t{run_id}')
-        input_crams = [Path(self.tumor_cram_path), Path(self.normal_cram_path)]
-        fa = Path(self.fa_path)
-        excl_bed = (Path(self.excl_bed_path) if self.excl_bed_path else None)
+        input_crams = [
+            Path(p).resolve()
+            for p in [self.tumor_cram_path, self.normal_cram_path]
+        ]
+        fa = Path(self.fa_path).resolve()
+        excl_bed = (
+            Path(self.excl_bed_path).resolve() if self.excl_bed_path else None
+        )
         raw_bcf = Path(self.output()[4].path)
         filtered_bcf = Path(self.output()[2].path)
         samples_tsv = run_dir.joinpath(f'{raw_bcf.stem}.tsv')

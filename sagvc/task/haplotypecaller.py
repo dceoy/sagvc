@@ -41,7 +41,6 @@ class CallVariantsWithHaplotypeCaller(SagvcTask):
         interval_lists = [Path(i.path) for i in self.input()]
         skip_interval_list_split = (len(interval_lists) == 1)
         fa = Path(self.fa_path).resolve()
-        input_cram = Path(self.normal_cram_path).resolve()
         output_path_prefix = '.'.join(str(output_vcf).split('.')[:-2])
         if skip_interval_list_split:
             tmp_prefixes = [output_path_prefix]
@@ -52,7 +51,7 @@ class CallVariantsWithHaplotypeCaller(SagvcTask):
             ]
         input_targets = yield [
             HaplotypeCaller(
-                input_cram_path=str(input_cram), fa_path=str(fa),
+                input_cram_path=self.normal_cram_path, fa_path=str(fa),
                 dbsnp_vcf_path=self.dbsnp_vcf_path,
                 interval_list_path=str(o), output_path_prefix=s,
                 gatk=self.gatk, save_memory=self.save_memory, n_cpu=self.n_cpu,
@@ -196,9 +195,6 @@ class ScoreVariantsWithCnn(SagvcTask):
         ]
 
     def run(self):
-        input_vcf = Path(self.input()[0][0].path)
-        input_cram = Path(self.input()[0][2].path)
-        fa = Path(self.fa_path).resolve()
         interval_lists = [Path(i.path) for i in self.input()[1]]
         skip_interval_list_split = (len(interval_lists) == 1)
         output_vcf = Path(self.output()[0].path)
@@ -212,13 +208,12 @@ class ScoreVariantsWithCnn(SagvcTask):
             ]
         input_targets = yield [
             CNNScoreVariants(
-                input_vcf_path=str(input_vcf),
-                input_cram_path=str(input_cram), fa_path=str(fa),
-                interval_list_path=str(o),
-                output_path_prefix=s, gatk=self.gatk,
-                python=self.python, save_memory=self.save_memory,
-                n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-                sh_config=self.sh_config
+                input_vcf_path=self.input()[0][0].path,
+                input_cram_path=self.input()[0][2].path, fa_path=self.fa_path,
+                interval_list_path=str(o), output_path_prefix=s,
+                gatk=self.gatk, python=self.python,
+                save_memory=self.save_memory, n_cpu=self.n_cpu,
+                memory_mb=self.memory_mb, sh_config=self.sh_config
             ) for o, s in zip(interval_lists, tmp_prefixes)
         ]
         run_id = '.'.join(output_vcf.name.split('.')[:-2])

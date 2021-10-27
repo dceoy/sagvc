@@ -78,7 +78,8 @@ class ScoreMsiWithMsisensor(SagvcTask):
         output_files = [Path(i.path) for i in self.output()]
         run_dir = output_files[0].parent
         crams = [
-            Path(p) for p in [self.tumor_cram_path, self.normal_cram_path]
+            Path(p).resolve()
+            for p in [self.tumor_cram_path, self.normal_cram_path]
         ]
         bams = [
             (c if c.suffix == '.bam' else run_dir.joinpath(f'{c.stem}.bam'))
