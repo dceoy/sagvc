@@ -10,12 +10,12 @@ Usage:
         [--src-path=<path>|--src-url=<url>] [--dest-dir=<path>]
     sagvc haplotypecaller [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>]
-        [--interval-list=<path>|--bed=<path>] <fa_path> <dbsnp_vcf_path>
-        <normal_sam_path>
+        [--interval-list=<path>|--bed=<path>] [--dbsnp-vcf=<path>]
+        (--resource-vcf=<path>) <fa_path> <normal_sam_path>
     sagvc mutect2 [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>]
-        [--interval-list=<path>|--bed=<path>] [--tumor-sample=<name>]
-        [--normal-sample=<name>] <fa_path> <germline_resource_vcf_path>
+        [--interval-list=<path>|--bed=<path>] (--germline-resource-vcf=<path>)
+        [--tumor-sample=<name>] [--normal-sample=<name>] <fa_path>
         <tumor_sam_path> <normal_sam_path>
     sagvc delly [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--excl-bed=<path>]
@@ -27,8 +27,8 @@ Usage:
         <normal_sam_path>
     sagvc msisensor [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--use-msisensor-pro]
-        [--bed=<path>] <fa_path> <microsatellites_tsv_path> <tumor_sam_path>
-        <normal_sam_path>
+        [--bed=<path>] [--microsatellites-tsv=<path>] <fa_path>
+        <tumor_sam_path> <normal_sam_path>
     sagvc -h|--help
     sagvc --version
 
@@ -56,22 +56,24 @@ Options:
     --src-url=<url>         Specify a source URL
     --interval-list=<path>, --bed=<path>
                             Specify a path to an interval_list or BED
+    --dbsnp-vcf=<path>      Specify a path to a dbSNP VCF file
+    --resource-vcf=<path>   Specify a path to a known SNP and INDEL VCF file
+    --germline-resource-vcf=<path>
+                            Specify a path to a germline population VCF file
     --excl-bed=<path>       Specify a path to an exclusion BED
     --tumor-sample=<name>   Specify a tumor sample name
     --normal-sample=<name>  Specify a normal sample name
     --seq-method=<type>     Specify a sequencing assay type [default: wgs]
     --access-bed=<path>     Specify a path to a CNV accessible region BED
     --refflat-txt=<path>    Specify a path to a refFlat text file
+    --microsatellites-tsv=<path>
+                            Specify a path to a microsatellites TSV file
 
 Args:
     <fa_path>               Path to an reference FASTA file
                             (The index and sequence dictionary are required.)
-    <dbsnp_vcf_path>        Path to a dbSNP VCF file
-    <germline_resource_vcf_path>
-                            Path to a germline resource VCF file
     <tumor_sam_path>        Path to a tumor CRAM file
     <normal_sam_path>       Path to a normal CRAM file
-    <ms_tsv_path>           Path to a microsatellites TSV file
 """
 
 import logging
@@ -89,6 +91,7 @@ from ..task.cnvkit import CallSomaticCnvWithCnvkit
 from ..task.delly import CallSomaticStructualVariantsWithDelly
 from ..task.downloader import (DownloadAndProcessResourceFiles,
                                WritePassingAfOnlyVcf)
+from ..task.haplotypecaller import FilterVariantTranches
 from ..task.msisensor import ScoreMsiWithMsisensor
 
 
@@ -171,7 +174,28 @@ def main():
             log_level=log_level
         )
     elif args['haplotypecaller']:
-        pass
+        assert bool(args['--resource-vcf']), '--resource-vcf required'
+        build_luigi_tasks(
+            tasks=[
+                FilterVariantTranches(
+                    normal_cram_path=args['<normal_sam_path>'],
+                    fa_path=args['<fa_path>'],
+                    dbsnp_vcf_path=(args['--dbsnp-vcf'] or ''),
+                    resource_vcf_paths=args['--resource-vcf'],
+                    dest_dir_path=args['--dest-dir'],
+                    gatk=fetch_executable('gatk'),
+                    samtools=fetch_executable('samtools'),
+                    save_memory=(memory_mb_per_worker < 8192),
+                    n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
+                    sh_config=sh_config,
+                    interval_list_path=(
+                        args['--interval-list'] or args['--bed'] or ''
+                    ),
+                    scatter_count=n_cpu
+                )
+            ],
+            workers=n_worker, log_level=log_level
+        )
     elif args['mutect2']:
         pass
     elif args['delly']:
@@ -219,8 +243,11 @@ def main():
                     tumor_cram_path=args['<tumor_sam_path>'],
                     normal_cram_path=args['<normal_sam_path>'],
                     fa_path=args['<fa_path>'],
-                    microsatellites_tsv_path=args['<ms_tsv_path>'],
-                    bed_path=args['--bed'], dest_dir_path=args['--dest-dir'],
+                    microsatellites_tsv_path=(
+                        args['--microsatellites-tsv'] or ''
+                    ),
+                    bed_path=(args['--bed'] or ''),
+                    dest_dir_path=args['--dest-dir'],
                     msisensor=fetch_executable(
                         'msisensor-pro' if args['--use-msisensor-pro']
                         else 'msisensor'

@@ -23,9 +23,9 @@ class ScanMicrosatellites(SagvcTask):
         )
 
     def run(self):
-        fa = Path(self.fa_path)
-        run_id = fa.stem
+        run_id = Path(self.fa_path).stem
         self.print_log(f'Scan microsatellites:\t{run_id}')
+        fa = Path(self.fa_path).resolve()
         output_tsv = Path(self.output().path)
         self.setup_shell(
             run_id=run_id, commands=self.msisensor, cwd=output_tsv.parent,
@@ -41,7 +41,7 @@ class ScoreMsiWithMsisensor(SagvcTask):
     tumor_cram_path = luigi.Parameter()
     normal_cram_path = luigi.Parameter()
     fa_path = luigi.Parameter()
-    microsatellites_tsv_path = luigi.Parameter()
+    microsatellites_tsv_path = luigi.Parameter(default='')
     bed_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     msisensor = luigi.Parameter(default='msisensor')
@@ -49,6 +49,20 @@ class ScoreMsiWithMsisensor(SagvcTask):
     n_cpu = luigi.IntParameter(default=1)
     sh_config = luigi.DictParameter(default=dict())
     priority = 20
+
+    def requires(self):
+        if self.microsatellites_tsv_path:
+            return super().requires()
+        else:
+            return ScanMicrosatellites(
+                fa_path=self.fa_path,
+                dest_dir_path=str(
+                    Path(self.dest_dir_path).joinpath(
+                        Path(self.fa_path).stem + '.wgs'
+                    )
+                ),
+                msisensor=self.msisensor, sh_config=self.sh_config
+            )
 
     def output(self):
         run_dir = Path(self.dest_dir_path).resolve().joinpath(
@@ -79,8 +93,10 @@ class ScoreMsiWithMsisensor(SagvcTask):
         ]
         run_id = Path(output_files[0].stem).stem
         self.print_log(f'Score MSI with MSIsensor:\t{run_id}')
-        microsatellites_tsv = Path(self.microsatellites_tsv_path).resource()
-        bed = (Path(self.bed_path).resource() if self.bed_path else None)
+        ms_tsv = Path(
+            self.microsatellites_tsv_path or self.input().path
+        ).resource()
+        bed = (Path(self.bed_path).resolve() if self.bed_path else None)
         self.setup_shell(
             run_id=run_id, commands=self.msisensor, cwd=run_dir,
             **self.sh_config
@@ -89,14 +105,11 @@ class ScoreMsiWithMsisensor(SagvcTask):
             args=(
                 f'set -e && {self.msisensor} msi'
                 + f' -t {bams[0]} -n {bams[1]}'
-                + f' -d {microsatellites_tsv}'
+                + f' -d {ms_tsv}'
                 + (' -e {bed}' if bed else '')
                 + f' -o {output_files[0]}'
             ),
-            input_files_or_dirs=[
-                *bams, microsatellites_tsv,
-                *([bed] if bed else list())
-            ],
+            input_files_or_dirs=[*bams, ms_tsv, *([bed] if bed else list())],
             output_files_or_dirs=[*output_files, run_dir]
         )
         for t in tmp_target:
