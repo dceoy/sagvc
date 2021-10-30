@@ -8,6 +8,7 @@ COPY --from=dceoy/bedtools:latest /usr/local/src/bedtools2 /usr/local/src/bedtoo
 COPY --from=dceoy/gatk:latest /opt/conda /opt/conda
 COPY --from=dceoy/gatk:latest /opt/gatk /opt/gatk
 COPY --from=dceoy/delly:latest /usr/local/bin/delly /usr/local/bin/delly
+COPY --from=dceoy/manta:latest /opt/manta /opt/manta
 COPY --from=dceoy/msisensor:latest /usr/local/bin/msisensor /usr/local/bin/msisensor
 COPY --from=dceoy/msisensor-pro:latest /usr/local/bin/msisensor-pro /usr/local/bin/msisensor-pro
 ADD https://bootstrap.pypa.io/get-pip.py /tmp/get-pip.py
@@ -88,7 +89,7 @@ RUN set -e \
       && apt-get -y install --no-install-recommends --no-install-suggests \
         apt-transport-https apt-utils ca-certificates curl gnupg gnuplot \
         libcurl3-gnutls libgsl23 libgkl-jni libncurses5 openjdk-8-jre pbzip2 \
-        perl pigz texlive-fonts-extra texlive-fonts-recommended \
+        perl pigz python texlive-fonts-extra texlive-fonts-recommended \
         texlive-latex-base texlive-latex-extra wget
 
 RUN set -eo pipefail \
@@ -122,7 +123,9 @@ RUN set -e \
 ENV JAVA_LIBRARY_PATH /usr/lib/jni
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
 ENV CLASSPATH /opt/gatk/gatk.jar:${CLASSPATH}
-ENV PATH /opt/gatk/bin:/opt/conda/envs/gatk/bin:/opt/conda/bin:${PATH}
+ENV BCFTOOLS_PLUGINS /usr/local/src/bcftools/plugins
+ENV PYTHONPATH /opt/manta/lib/python:/opt/strelka/lib/python:${PYTHONPATH}
+ENV PATH /opt/gatk/bin:/opt/conda/envs/gatk/bin:/opt/conda/bin:/opt/manta/bin:${PATH}
 ENV MPLCONFIGDIR /tmp/cnvkit
 
 ENTRYPOINT ["/opt/conda/bin/sagvc"]

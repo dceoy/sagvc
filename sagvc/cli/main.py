@@ -22,6 +22,9 @@ Usage:
         [--print-subprocesses] [--dest-dir=<path>] [--excl-bed=<path>]
         [--tumor-sample=<name>] [--normal-sample=<name>] <fa_path>
         <tumor_sam_path> <normal_sam_path>
+    sagvc manta [--debug|--info] [--cpus=<int>] [--skip-cleaning]
+        [--print-subprocesses] [--dest-dir=<path>] [--exome] [--bed=<path>]
+        <fa_path> <tumor_sam_path> <normal_sam_path>
     sagvc cnvkit [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--seq-method=<type>]
         [--access-bed=<path>] [--refflat-txt=<path>] <fa_path> <tumor_sam_path>
@@ -39,6 +42,7 @@ Commands:
     haplotypecaller         Call germline short variants using GATK
     mutect2                 Call somatic short variants using GATK
     delly                   Call somatic structural variants using Delly
+    manta                   Call somatic structural variants using Manta
     cnvkit                  Call somatic CNV using CNVkit
     msisensor               Evaluate MSI using MSIsensor
 
@@ -66,6 +70,7 @@ Options:
     --excl-bed=<path>       Specify a path to an exclusion BED
     --tumor-sample=<name>   Specify a tumor sample name
     --normal-sample=<name>  Specify a normal sample name
+    --exome                 Set options for WES input
     --seq-method=<type>     Specify a sequencing assay type [default: wgs]
     --access-bed=<path>     Specify a path to a CNV accessible region BED
     --refflat-txt=<path>    Specify a path to a refFlat text file
@@ -95,6 +100,7 @@ from ..task.delly import CallSomaticStructualVariantsWithDelly
 from ..task.downloader import (DownloadAndProcessResourceFiles,
                                WritePassingAfOnlyVcf)
 from ..task.haplotypecaller import FilterVariantTranches
+from ..task.manta import CallSomaticStructualVariantsWithManta
 from ..task.msisensor import ScoreMsiWithMsisensor
 from ..task.mutect2 import FilterMutectCalls
 
@@ -243,6 +249,22 @@ def main():
                     bcftools=fetch_executable('bcftools'),
                     n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
                     sh_config=sh_config
+                )
+            ],
+            workers=n_worker, log_level=log_level
+        )
+    elif args['manta']:
+        build_luigi_tasks(
+            tasks=[
+                CallSomaticStructualVariantsWithManta(
+                    tumor_cram_path=args['<tumor_sam_path>'],
+                    normal_cram_path=args['<normal_sam_path>'],
+                    fa_path=args['<fa_path>'], bed_path=(args['--bed'] or ''),
+                    dest_dir_path=args['--dest-dir'],
+                    python2=fetch_executable('python2'),
+                    configmantapy_path=fetch_executable('configManta.py'),
+                    exome=args['--exome'], n_cpu=n_cpu_per_worker,
+                    memory_mb=memory_mb_per_worker, sh_config=sh_config
                 )
             ],
             workers=n_worker, log_level=log_level

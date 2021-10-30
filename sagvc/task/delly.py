@@ -95,5 +95,64 @@ class CallSomaticStructualVariantsWithDelly(SagvcTask):
         )
 
 
+class CallGermlineStructualVariantsWithDelly(SagvcTask):
+    normal_cram_path = luigi.Parameter()
+    fa_path = luigi.Parameter()
+    tumor_sample_name = luigi.Parameter()
+    normal_sample_name = luigi.Parameter()
+    excl_bed_path = luigi.Parameter(default='')
+    dest_dir_path = luigi.Parameter(default='.')
+    delly = luigi.Parameter(default='delly')
+    bcftools = luigi.Parameter(default='bcftools')
+    n_cpu = luigi.IntParameter(default=1)
+    memory_mb = luigi.FloatParameter(default=4096)
+    sh_config = luigi.DictParameter(default=dict())
+    priority = 30
+
+    def output(self):
+        run_dir = Path(self.dest_dir_path).resolve().joinpath(
+            Path(self.normal_cram_path).stem
+        )
+        return [
+            luigi.LocalTarget(
+                run_dir.joinpath(run_dir.name + f'.delly.{s}')
+            ) for s in ['vcf.gz', 'vcf.gz.tbi', 'bcf', 'bcf.csi']
+        ]
+
+    def run(self):
+        output_vcf = Path(self.output()[0].path)
+        run_dir = output_vcf.parent
+        run_id = run_dir.name
+        self.print_log(f'Call germline SVs with Delly:\t{run_id}')
+        input_cram = Path(self.normal_cram_path).resolve()
+        fa = Path(self.fa_path).resolve()
+        excl_bed = (
+            Path(self.excl_bed_path).resolve() if self.excl_bed_path else None
+        )
+        raw_bcf = Path(self.output()[2].path)
+        self.setup_shell(
+            run_id=run_id, commands=[self.delly, self.bcftools], cwd=run_dir,
+            **self.sh_config, env={'OMP_NUM_THREADS': str(self.n_cpu)}
+        )
+        self.run_shell(
+            args=(
+                f'set -e && {self.delly} call'
+                + f' --genome {fa}'
+                + (f' --exclude {excl_bed}' if excl_bed else '')
+                + f' --outfile {raw_bcf}'
+                + f' {input_cram}'
+            ),
+            input_files_or_dirs=[
+                input_cram, fa, *([excl_bed] if self.excl_bed_path else list())
+            ],
+            output_files_or_dirs=[raw_bcf, f'{raw_bcf}.csi', run_dir]
+        )
+        self.bcftools_sort(
+            input_vcf_path=raw_bcf, output_vcf_path=output_vcf,
+            bcftools=self.bcftools, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+            index_vcf=True, remove_input=False
+        )
+
+
 if __name__ == '__main__':
     luigi.run()
