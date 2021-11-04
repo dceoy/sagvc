@@ -3,15 +3,13 @@
 from pathlib import Path
 
 import luigi
-from ftarc.task.resource import FetchReferenceFasta
 
 from .core import SagvcTask
-from .resource import CreateRegionListBed
 
 
 class CreateCnvAcccessBed(SagvcTask):
     fa_path = luigi.Parameter()
-    cnv_blacklist_path = luigi.Parameter()
+    excl_bed_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     cnvkitpy = luigi.Parameter(default='cnvkit.py')
     pigz = luigi.Parameter(default='pigz')
@@ -25,35 +23,25 @@ class CreateCnvAcccessBed(SagvcTask):
     sh_config = luigi.DictParameter(default=dict())
     priority = 10
 
-    def requires(self):
-        return [
-            FetchReferenceFasta(
-                fa_path=self.fa_path, pigz=self.pigz, pbzip2=self.pbzip2,
-                samtools=self.samtools, gatk=self.gatk, n_cpu=self.n_cpu,
-                memory_mb=self.memory_mb, sh_config=self.sh_config
-            ),
-            CreateRegionListBed(
-                region_list_path=self.cnv_blacklist_path,
-                dest_dir_path=self.dest_dir_path, bgzip=self.bgzip,
-                tabix=self.tabix, n_cpu=self.n_cpu, sh_config=self.sh_config
-            )
-        ]
-
     def output(self):
         return luigi.LocalTarget(
             Path(self.dest_dir_path).resolve().joinpath(
-                Path(self.fa_path).stem + '.not_in.'
-                + Path(self.cnv_blacklist_path).stem + '.access.bed'
+                Path(self.fa_path).stem + (
+                    ('.excluding.' + Path(self.excl_bed_path).stem)
+                    if self.excl_bed_path else ''
+                ) + '.access.bed'
             )
         )
 
     def run(self):
-        fa = Path(self.input()[0][0].path)
-        run_id = fa.stem
+        run_id = Path(self.fa_path).stem
         self.print_log(
             f'Calculate accessible coordinates for CNV calling:\t{run_id}'
         )
-        cnv_blacklist_bed = Path(self.input()[1][-1].path)
+        fa = Path(self.fa_path).resolve()
+        excl_bed = (
+            Path(self.excl_bed_path).resolve() if self.excl_bed_path else None
+        )
         output_bed = Path(self.output().path)
         self.setup_shell(
             run_id=run_id, commands=self.cnvkitpy, cwd=output_bed.parent,
@@ -62,10 +50,10 @@ class CreateCnvAcccessBed(SagvcTask):
         self.run_shell(
             args=(
                 f'set -e && {self.cnvkitpy} access'
-                + f' --exclude={cnv_blacklist_bed}'
+                + (f' --exclude={excl_bed}' if excl_bed else '')
                 + f' --output={output_bed} {fa}'
             ),
-            input_files_or_dirs=[fa, cnv_blacklist_bed],
+            input_files_or_dirs=[fa, *([excl_bed] if excl_bed else list())],
             output_files_or_dirs=output_bed
         )
 

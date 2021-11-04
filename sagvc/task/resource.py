@@ -115,6 +115,7 @@ class CreateWgsIntervalListBeds(SagvcTask):
     bedtools = luigi.Parameter(default='bedtools')
     bgzip = luigi.Parameter(default='bgzip')
     tabix = luigi.Parameter(default='tabix')
+    n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
     priority = 10
@@ -458,15 +459,14 @@ class CreateBiallelicSnpIntervalList(SagvcTask):
     priority = 90
 
     def output(self):
-        input_files = [Path(i.path) for i in self.input()]
-        return [
-            luigi.LocalTarget(
-                input_files[0].parent.joinpath(
-                    f'{input_files[0].stem}.interval_list'
+        snp_vcf = Path(self.input()[0].path)
+        return (
+            [
+                luigi.LocalTarget(
+                    snp_vcf.parent.joinpath(f'{snp_vcf.stem}.interval_list')
                 )
-            ),
-            *[luigi.LocalTarget(f) for f in input_files]
-        ]
+            ] + self.input()
+        )
 
     def run(self):
         output_interval_list = Path(self.output()[0].path)
@@ -474,7 +474,7 @@ class CreateBiallelicSnpIntervalList(SagvcTask):
         self.print_log(
             f'Create a common biallelic SNP interval_list:\t{run_id}'
         )
-        input_vcf = Path(self.input()[0].path)
+        snp_vcf = Path(self.input()[0].path)
         fa = Path(self.fa_path).resolve()
         self.setup_shell(
             run_id=run_id, commands=self.gatk, cwd=output_interval_list.parent,
@@ -488,11 +488,11 @@ class CreateBiallelicSnpIntervalList(SagvcTask):
         self.run_shell(
             args=(
                 f'set -e && {self.gatk} VcfToIntervalList'
-                + f' --INPUT {input_vcf}'
+                + f' --INPUT {snp_vcf}'
                 + f' --REFERENCE_SEQUENCE {fa}'
                 + f' --OUTPUT {output_interval_list}'
             ),
-            input_files_or_dirs=[input_vcf, fa],
+            input_files_or_dirs=[snp_vcf, fa],
             output_files_or_dirs=output_interval_list
         )
 

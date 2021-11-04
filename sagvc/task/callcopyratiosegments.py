@@ -26,7 +26,10 @@ class PreprocessIntervals(SagvcTask):
         return luigi.LocalTarget(
             Path(self.dest_dir_path).resolve().joinpath(
                 '{0}.preprocessed.{1}.interval_list'.format(
-                    Path(self.interval_list_path or self.fa_path).stem,
+                    '.'.join([
+                        Path(p).stem
+                        for p in [self.fa_path, self.interval_list_path] if p
+                    ]),
                     ('wxs' if self.exome else 'wgs')
                 )
             )

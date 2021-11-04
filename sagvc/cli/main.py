@@ -6,6 +6,9 @@ Usage:
     sagvc download [--debug|--info] [--cpus=<int>] [--workers=<int>]
         [--skip-cleaning] [--print-subprocesses] [--use-gnomad-v3]
         [--use-msisensor-pro] [--dest-dir=<path>]
+    sagvc target [--debug|--info] [--cpus=<int>] [--workers=<int>]
+        [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
+        [--cnv-blacklist=<path>] <fa_path> <bed_path>
     sagvc write-af-only-vcf [--debug|--info] [--cpus=<int>]
         [--src-path=<path>|--src-url=<url>] [--dest-dir=<path>]
     sagvc haplotypecaller [--debug|--info] [--cpus=<int>] [--skip-cleaning]
@@ -42,6 +45,7 @@ Usage:
 
 Commands:
     download                Download and preprocess hg38 resources
+    target                  Prepare targeted region resources
     write-af-only-vcf       Extract and write only AF from VCF INFO
     haplotypecaller         Call germline short variants using GATK
     mutect2                 Call somatic short variants using GATK
@@ -62,6 +66,7 @@ Options:
     --use-gnomad-v3         Use gnomAD v3 instead of v2
     --use-msisensor-pro     Use MSIsensor-pro instead of MSIsensor
     --dest-dir=<path>       Specify a destination directory path [default: .]
+    --cnv-blacklist=<path>  Specify a path to a CNV blacklist file
     --src-path=<path>       Specify a source file path
     --src-url=<url>         Specify a source URL
     --interval-list=<path>, --bed=<path>
@@ -89,6 +94,7 @@ Options:
 Args:
     <fa_path>               Path to an reference FASTA file
                             (The index and sequence dictionary are required.)
+    <bed_path>              Path to a target region BED file
     <tumor_sam_path>        Path to a tumor CRAM file
     <normal_sam_path>       Path to a normal CRAM file
 """
@@ -108,6 +114,7 @@ from ..task.callcopyratiosegments import CallCopyRatioSegmentsTumor
 from ..task.cnvkit import CallSomaticCnvWithCnvkit
 from ..task.delly import CallSomaticStructualVariantsWithDelly
 from ..task.downloader import (DownloadAndProcessResourceFiles,
+                               PrepareTargetedReosourceFiles,
                                WritePassingAfOnlyVcf)
 from ..task.haplotypecaller import FilterVariantTranches
 from ..task.manta import CallSomaticStructualVariantsWithManta
@@ -175,6 +182,27 @@ def main():
                         else 'msisensor'
                     ),
                     use_gnomad_v3=args['--use-gnomad-v3'],
+                    n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
+                    sh_config=sh_config
+                )
+            ],
+            workers=n_worker, log_level=log_level
+        )
+    elif args['target']:
+        assert bool(args['--cnv-blacklist']), '--cnv-blacklist required'
+        build_luigi_tasks(
+            tasks=[
+                PrepareTargetedReosourceFiles(
+                    bed_path=args['<bed_path>'], fa_path=args['<fa_path>'],
+                    cnv_blacklist_path=args['--cnv-blacklist'],
+                    dest_dir_path=args['--dest-dir'],
+                    **{
+                        c: fetch_executable(c) for c in [
+                            'pbzip2', 'bgzip', 'pigz', 'samtools', 'tabix',
+                            'gatk', 'bedtools'
+                        ]
+                    },
+                    cnvkitpy=fetch_executable('cnvkit.py'),
                     n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
                     sh_config=sh_config
                 )

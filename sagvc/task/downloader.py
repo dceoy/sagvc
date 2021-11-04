@@ -14,7 +14,92 @@ from .callcopyratiosegments import PreprocessIntervals
 from .cnvkit import CreateCnvAcccessBed
 from .core import SagvcTask
 from .msisensor import ScanMicrosatellites
-from .resource import CreateBiallelicSnpIntervalList, CreateWgsIntervalListBeds
+from .resource import (CreateBiallelicSnpIntervalList,
+                       CreateExclusionIntervalListBed, CreateIntervalListBed,
+                       CreateIntervalListWithBed, CreateWgsIntervalListBeds)
+
+
+class PrepareTargetedReosourceFiles(luigi.Task):
+    bed_path = luigi.Parameter()
+    fa_path = luigi.Parameter()
+    cnv_blacklist_path = luigi.Parameter()
+    dest_dir_path = luigi.Parameter(default='.')
+    gatk = luigi.Parameter(default='gatk')
+    bgzip = luigi.Parameter(default='bgzip')
+    tabix = luigi.Parameter(default='tabix')
+    pigz = luigi.Parameter(default='pigz')
+    pbzip2 = luigi.Parameter(default='pbzip2')
+    samtools = luigi.Parameter(default='samtools')
+    bedtools = luigi.Parameter(default='bedtools')
+    cnvkitpy = luigi.Parameter(default='cnvkit.py')
+    n_cpu = luigi.IntParameter(default=1)
+    memory_mb = luigi.FloatParameter(default=4096)
+    sh_config = luigi.DictParameter(default=dict())
+    priority = 80
+
+    def requires(self):
+        fa = Path(self.fa_path).resolve()
+        return CreateIntervalListWithBed(
+            bed_path=self.bed_path,
+            fa_dict_path=str(fa.parent.joinpath(f'{fa.stem}.dict')),
+            dest_dir_path=self.dest_dir_path, gatk=self.gatk, n_cpu=self.n_cpu,
+            memory_mb=self.memory_mb, sh_config=self.sh_config
+        )
+
+    def output(self):
+        dest_dir = Path(self.dest_dir_path).resolve()
+        bed_stem = Path(self.bed_path).stem
+        fa_stem = Path(self.fa_path).stem
+        return [
+            luigi.LocalTarget(dest_dir.joinpath(n)) for n in [
+                f'{bed_stem}.interval_list', f'{bed_stem}.bed.gz',
+                f'{bed_stem}.bed.gz.tbi', f'{bed_stem}.bed',
+                f'{bed_stem}.excl.bed.gz',
+                f'{bed_stem}.excl.bed.gz.tbi',
+                f'{bed_stem}.excl.bed',
+                f'{fa_stem}.excluding.{bed_stem}.excl.access.bed',
+                f'{fa_stem}.{bed_stem}.preprocessed.wgs.interval_list',
+                f'{fa_stem}.{bed_stem}.preprocessed.wxs.interval_list'
+            ]
+        ]
+
+    def run(self):
+        interval_list_path = self.input().path
+        input_targets = yield [
+            CreateIntervalListBed(
+                interval_list_path=interval_list_path,
+                dest_dir_path=self.dest_dir_path, bgzip=self.bgzip,
+                tabix=self.tabix, n_cpu=self.n_cpu, sh_config=self.sh_config
+            ),
+            CreateExclusionIntervalListBed(
+                interval_list_path=interval_list_path, fa_path=self.fa_path,
+                dest_dir_path=self.dest_dir_path, pigz=self.pigz,
+                pbzip2=self.pbzip2, samtools=self.samtools, gatk=self.gatk,
+                bedtools=self.bedtools, bgzip=self.bgzip, tabix=self.tabix,
+                n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                sh_config=self.sh_config
+            )
+        ]
+        yield [
+            CreateCnvAcccessBed(
+                fa_path=self.fa_path, excl_bed_path=input_targets[1][2].path,
+                dest_dir_path=self.dest_dir_path, cnvkitpy=self.cnvkitpy,
+                pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
+                gatk=self.gatk, bgzip=self.bgzip, tabix=self.tabix,
+                n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                sh_config=self.sh_config
+            ),
+            *[
+                PreprocessIntervals(
+                    fa_path=self.fa_path,
+                    cnv_blacklist_path=self.cnv_blacklist_path,
+                    interval_list_path=interval_list_path,
+                    dest_dir_path=self.dest_dir_path, gatk=self.gatk,
+                    exome=bool(i), n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                    sh_config=self.sh_config
+                ) for i in range(2)
+            ]
+        ]
 
 
 class DownloadAndProcessRegionFiles(luigi.Task):
@@ -61,7 +146,6 @@ class DownloadAndProcessRegionFiles(luigi.Task):
 
     def output(self):
         fa = Path(self.input()[0][0].path)
-        cnv_blacklist = Path(self.input()[1][0].path)
         return (
             self.input()[0] + self.input()[1] + [
                 luigi.LocalTarget(fa.parent.joinpath(n)) for n in [
@@ -70,8 +154,9 @@ class DownloadAndProcessRegionFiles(luigi.Task):
                     f'{fa.stem}.wgs.bed.gz.tbi', f'{fa.stem}.wgs.bed',
                     f'{fa.stem}.wgs.excl.bed.gz',
                     f'{fa.stem}.wgs.excl.bed.gz.tbi',
-                    f'{fa.stem}.wgs.excl.bed',
-                    f'{fa.stem}.not_in.{cnv_blacklist.stem}.access.bed',
+                    f'{fa.stem}.wgs.excl.bed', f'{fa.stem}.access.bed',
+                    f'{fa.stem}.preprocessed.wgs.interval_list',
+                    f'{fa.stem}.preprocessed.wxs.interval_list',
                     f'{fa.stem}.microsatellites.tsv'
                 ]
             ]
@@ -90,16 +175,15 @@ class DownloadAndProcessRegionFiles(luigi.Task):
                 sh_config=self.sh_config
             ),
             CreateCnvAcccessBed(
-                fa_path=fa_path, cnv_blacklist_path=cnv_blacklist_path,
-                dest_dir_path=dest_dir_path, cnvkitpy=self.cnvkitpy,
-                pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
-                gatk=self.gatk, bgzip=self.bgzip, tabix=self.tabix,
-                n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                fa_path=fa_path, dest_dir_path=dest_dir_path,
+                cnvkitpy=self.cnvkitpy, pigz=self.pigz, pbzip2=self.pbzip2,
+                samtools=self.samtools, gatk=self.gatk, bgzip=self.bgzip,
+                tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
                 sh_config=self.sh_config
             ),
             *[
                 PreprocessIntervals(
-                    cnv_blacklist_path=cnv_blacklist_path,
+                    fa_path=fa_path, cnv_blacklist_path=cnv_blacklist_path,
                     dest_dir_path=self.dest_dir_path, gatk=self.gatk,
                     exome=bool(i), n_cpu=self.n_cpu, memory_mb=self.memory_mb,
                     sh_config=self.sh_config
