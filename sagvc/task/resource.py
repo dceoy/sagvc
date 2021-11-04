@@ -301,7 +301,7 @@ class CreateRegionListBed(SagvcTask):
 
 class CreateIntervalListWithBed(SagvcTask):
     bed_path = luigi.Parameter()
-    seq_dict_path = luigi.Parameter()
+    fa_dict_path = luigi.Parameter()
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
     n_cpu = luigi.IntParameter(default=1)
@@ -320,7 +320,7 @@ class CreateIntervalListWithBed(SagvcTask):
         run_id = interval_list.stem
         self.print_log(f'Create an interval_list file:\t{run_id}')
         bed = Path(self.bed_path).resolve()
-        seq_dict = Path(self.seq_dict_path).resolve()
+        fa_dict = Path(self.fa_dict_path).resolve()
         self.setup_shell(
             run_id=run_id, commands=self.gatk, cwd=interval_list.parent,
             **self.sh_config,
@@ -334,10 +334,10 @@ class CreateIntervalListWithBed(SagvcTask):
             args=(
                 f'set -e && {self.gatk} BedToIntervalList'
                 + f' --INPUT {bed}'
-                + f' --SEQUENCE_DICTIONARY {seq_dict}'
+                + f' --SEQUENCE_DICTIONARY {fa_dict}'
                 + f' --OUTPUT {interval_list}'
             ),
-            input_files_or_dirs=[bed, seq_dict],
+            input_files_or_dirs=[bed, fa_dict],
             output_files_or_dirs=interval_list
         )
 
@@ -445,6 +445,55 @@ class SplitEvaluationIntervals(SagvcTask):
             ),
             input_files_or_dirs=[input_interval_list, fa],
             output_files_or_dirs=[*output_intervals, run_dir]
+        )
+
+
+@requires(CreateBiallelicSnpVcf)
+class CreateBiallelicSnpIntervalList(SagvcTask):
+    fa_path = luigi.Parameter()
+    gatk = luigi.Parameter(default='gatk')
+    n_cpu = luigi.IntParameter(default=1)
+    memory_mb = luigi.FloatParameter(default=4096)
+    sh_config = luigi.DictParameter(default=dict())
+    priority = 90
+
+    def output(self):
+        input_files = [Path(i.path) for i in self.input()]
+        return [
+            luigi.LocalTarget(
+                input_files[0].parent.joinpath(
+                    f'{input_files[0].stem}.interval_list'
+                )
+            ),
+            *[luigi.LocalTarget(f) for f in input_files]
+        ]
+
+    def run(self):
+        output_interval_list = Path(self.output()[0].path)
+        run_id = output_interval_list.stem
+        self.print_log(
+            f'Create a common biallelic SNP interval_list:\t{run_id}'
+        )
+        input_vcf = Path(self.input()[0].path)
+        fa = Path(self.fa_path).resolve()
+        self.setup_shell(
+            run_id=run_id, commands=self.gatk, cwd=output_interval_list.parent,
+            **self.sh_config,
+            env={
+                'JAVA_TOOL_OPTIONS': self.generate_gatk_java_options(
+                    n_cpu=self.n_cpu, memory_mb=self.memory_mb
+                )
+            }
+        )
+        self.run_shell(
+            args=(
+                f'set -e && {self.gatk} VcfToIntervalList'
+                + f' --INPUT {input_vcf}'
+                + f' --REFERENCE_SEQUENCE {fa}'
+                + f' --OUTPUT {output_interval_list}'
+            ),
+            input_files_or_dirs=[input_vcf, fa],
+            output_files_or_dirs=output_interval_list
         )
 
 

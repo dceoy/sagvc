@@ -25,10 +25,11 @@ class GetPileupSummaries(SagvcTask):
     priority = 50
 
     def output(self):
+        run_dir = Path(self.dest_dir_path).resolve().joinpath(
+            Path(self.cram_path).stem
+        )
         return luigi.LocalTarget(
-            Path(self.dest_dir_path).resolve().joinpath(
-                Path(self.cram_path).stem + '.pileup.table'
-            )
+            run_dir.joinpath(f'{run_dir.name}.pileup.table')
         )
 
     def run(self):

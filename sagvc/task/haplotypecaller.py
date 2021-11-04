@@ -27,7 +27,7 @@ class CallVariantsWithHaplotypeCaller(SagvcTask):
 
     def output(self):
         run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            self.create_matched_id(self.tumor_cram_path, self.normal_cram_path)
+            Path(self.normal_cram_path).stem
         )
         cram_stem = Path(self.normal_cram_path).stem
         return [

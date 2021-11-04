@@ -29,6 +29,10 @@ Usage:
         [--print-subprocesses] [--dest-dir=<path>] [--seq-method=<type>]
         [--access-bed=<path>] [--refflat-txt=<path>] <fa_path> <tumor_sam_path>
         <normal_sam_path>
+    sagvc callcopyratiosegments [--debug|--info] [--cpus=<int>]
+        [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
+        [--snp-interval-list=<path>] [--preproc-interval-list=<path>]
+        <fa_path> <tumor_sam_path> <normal_sam_path>
     sagvc msisensor [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--use-msisensor-pro]
         [--bed=<path>] [--microsatellites-tsv=<path>] <fa_path>
@@ -43,7 +47,8 @@ Commands:
     mutect2                 Call somatic short variants using GATK
     delly                   Call somatic structural variants using Delly
     manta                   Call somatic structural variants using Manta
-    cnvkit                  Call somatic CNV using CNVkit
+    cnvkit                  Call somatic CNVs using CNVkit
+    callcopyratiosegments   Call somatic CNVs using GATK
     msisensor               Evaluate MSI using MSIsensor
 
 Options:
@@ -57,23 +62,27 @@ Options:
     --use-gnomad-v3         Use gnomAD v3 instead of v2
     --use-msisensor-pro     Use MSIsensor-pro instead of MSIsensor
     --dest-dir=<path>       Specify a destination directory path [default: .]
-    --src-path=<path>       Specify a source path
+    --src-path=<path>       Specify a source file path
     --src-url=<url>         Specify a source URL
     --interval-list=<path>, --bed=<path>
-                            Specify a path to an interval_list or BED
+                            Specify a path to an interval_list or BED file
     --dbsnp-vcf=<path>      Specify a path to a dbSNP VCF file
     --resource-vcf=<path>   Specify a path to a known SNP and INDEL VCF file
     --biallelic-snp-vcf=<path>
                             Specify a path to a common biallelic SNP VCF file
     --germline-resource-vcf=<path>
                             Specify a path to a germline population VCF file
-    --excl-bed=<path>       Specify a path to an exclusion BED
+    --excl-bed=<path>       Specify a path to an exclusion BED file
     --tumor-sample=<name>   Specify a tumor sample name
     --normal-sample=<name>  Specify a normal sample name
     --exome                 Set options for WES input
     --seq-method=<type>     Specify a sequencing assay type [default: wgs]
-    --access-bed=<path>     Specify a path to a CNV accessible region BED
+    --access-bed=<path>     Specify a path to a CNV accessible region BED file
     --refflat-txt=<path>    Specify a path to a refFlat text file
+    --snp-interval-list=<path>
+                            Specify a path to a common sites VCF file
+    --preproc-interval-list=<path>
+                            Specify a path to a preprocessed interval_list file
     --microsatellites-tsv=<path>
                             Specify a path to a microsatellites TSV file
 
@@ -95,6 +104,7 @@ from ftarc.cli.util import (build_luigi_tasks, fetch_executable, print_log,
 from psutil import cpu_count, virtual_memory
 
 from .. import __version__
+from ..task.callcopyratiosegments import CallCopyRatioSegmentsTumor
 from ..task.cnvkit import CallSomaticCnvWithCnvkit
 from ..task.delly import CallSomaticStructualVariantsWithDelly
 from ..task.downloader import (DownloadAndProcessResourceFiles,
@@ -121,10 +131,14 @@ def main():
     logger.debug(f'args:{os.linesep}{args}')
     print_log(f'Start the workflow of sagvc {__version__}')
     n_cpu = int(args['--cpus'] or cpu_count())
-    n_worker = int(
-        args['--workers']
-        or (n_cpu if args['haplotypecaller'] or args['mutect2'] else 1)
-    )
+    if args['--workers']:
+        n_worker = int(args['--workers'])
+    elif args['haplotypecaller'] or args['mutect2']:
+        n_worker = n_cpu
+    elif args['callcopyratiosegments']:
+        n_worker = min(n_cpu, 2)
+    else:
+        n_worker = 1
     n_cpu_per_worker = max(floor(n_cpu / n_worker), 1)
     memory_mb_per_worker = ceil(
         virtual_memory().total / 1024 / 1024 / 2 / n_worker
@@ -284,6 +298,26 @@ def main():
                     rscript=fetch_executable('Rscript'),
                     seq_method=args['--seq-method'],
                     n_cpu=n_cpu_per_worker, sh_config=sh_config
+                )
+            ],
+            workers=n_worker, log_level=log_level
+        )
+    elif args['callcopyratiosegments']:
+        for k in ['--snp-interval-list', '--preproc-interval-list']:
+            assert bool(args[k]), f'{k} required'
+        build_luigi_tasks(
+            tasks=[
+                CallCopyRatioSegmentsTumor(
+                    tumor_cram_path=args['<tumor_sam_path>'],
+                    normal_cram_path=args['<normal_sam_path>'],
+                    fa_path=args['<fa_path>'],
+                    snp_interval_list_path=args['--snp-interval-list'],
+                    preproc_interval_list_path=args['--preproc-interval-list'],
+                    dest_dir_path=args['--dest-dir'],
+                    gatk=fetch_executable('gatk'),
+                    save_memory=(memory_mb_per_worker < 8192),
+                    n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
+                    sh_config=sh_config,
                 )
             ],
             workers=n_worker, log_level=log_level

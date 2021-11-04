@@ -81,17 +81,15 @@ class ScoreMsiWithMsisensor(SagvcTask):
             Path(p).resolve()
             for p in [self.tumor_cram_path, self.normal_cram_path]
         ]
-        bams = [
-            (c if c.suffix == '.bam' else run_dir.joinpath(f'{c.stem}.bam'))
-            for c in crams
-        ]
-        tmp_target = yield [
+        input_targets = yield [
             SamtoolsView(
-                input_sam_path=str(c), output_sam_path=str(b),
+                input_sam_path=str(c),
+                output_sam_path=str(run_dir.joinpath(f'{c.stem}.bam')),
                 fa_path=self.fa_path, samtools=self.samtools, n_cpu=self.n_cpu,
                 remove_input=False, index_sam=True, sh_config=self.sh_config
-            ) for c, b in zip(crams, bams) if c != b
+            ) for c in crams
         ]
+        bams = [Path(i[0].path) for i in input_targets]
         run_id = Path(output_files[0].stem).stem
         self.print_log(f'Score MSI with MSIsensor:\t{run_id}')
         ms_tsv = Path(
@@ -113,8 +111,9 @@ class ScoreMsiWithMsisensor(SagvcTask):
             input_files_or_dirs=[*bams, ms_tsv, *([bed] if bed else list())],
             output_files_or_dirs=[*output_files, run_dir]
         )
-        for t in tmp_target:
-            self.remove_files_and_dirs(*[i.path for i in t])
+        for c, t in zip(crams, input_targets):
+            if str(c) != t[0].path:
+                self.remove_files_and_dirs(*[i.path for i in t])
 
 
 if __name__ == '__main__':

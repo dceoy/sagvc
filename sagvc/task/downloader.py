@@ -10,10 +10,11 @@ from ftarc.task.picard import CreateSequenceDictionary
 from ftarc.task.samtools import SamtoolsFaidx
 from luigi.util import requires
 
+from .callcopyratiosegments import PreprocessIntervals
 from .cnvkit import CreateCnvAcccessBed
 from .core import SagvcTask
 from .msisensor import ScanMicrosatellites
-from .resource import CreateBiallelicSnpVcf, CreateWgsIntervalListBeds
+from .resource import CreateBiallelicSnpIntervalList, CreateWgsIntervalListBeds
 
 
 class DownloadAndProcessRegionFiles(luigi.Task):
@@ -79,6 +80,7 @@ class DownloadAndProcessRegionFiles(luigi.Task):
     def run(self):
         fa_path = self.input()[0][0].path
         dest_dir_path = str(Path(fa_path).parent)
+        cnv_blacklist_path = self.input()[1][0].path
         yield [
             CreateWgsIntervalListBeds(
                 fa_path=fa_path, dest_dir_path=dest_dir_path, pigz=self.pigz,
@@ -88,13 +90,21 @@ class DownloadAndProcessRegionFiles(luigi.Task):
                 sh_config=self.sh_config
             ),
             CreateCnvAcccessBed(
-                fa_path=fa_path, cnv_blacklist_path=self.input()[1][0].path,
+                fa_path=fa_path, cnv_blacklist_path=cnv_blacklist_path,
                 dest_dir_path=dest_dir_path, cnvkitpy=self.cnvkitpy,
                 pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
                 gatk=self.gatk, bgzip=self.bgzip, tabix=self.tabix,
                 n_cpu=self.n_cpu, memory_mb=self.memory_mb,
                 sh_config=self.sh_config
             ),
+            *[
+                PreprocessIntervals(
+                    cnv_blacklist_path=cnv_blacklist_path,
+                    dest_dir_path=self.dest_dir_path, gatk=self.gatk,
+                    exome=bool(i), n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                    sh_config=self.sh_config
+                ) for i in range(2)
+            ],
             ScanMicrosatellites(
                 fa_path=fa_path, dest_dir_path=dest_dir_path,
                 msisensor=self.msisensor, sh_config=self.sh_config
@@ -247,11 +257,19 @@ class DownloadAndProcessGnomadVcf(luigi.Task):
         )
         return (
             self.input()[0] + self.input()[1]
-            + [luigi.LocalTarget(f'{ba_snp_vcf}{s}') for s in ['', '.tbi']]
+            + [
+                luigi.LocalTarget(ba_snp_vcf),
+                luigi.LocalTarget(f'{ba_snp_vcf}.tbi'),
+                luigi.LocalTarget(
+                    ba_snp_vcf.parent.joinpath(
+                        f'{ba_snp_vcf.stem}.interval_list'
+                    )
+                )
+            ]
         )
 
     def run(self):
-        yield CreateBiallelicSnpVcf(
+        yield CreateBiallelicSnpIntervalList(
             input_vcf_path=self.input()[0][0].path,
             fa_path=self.input()[1][0].path, dest_dir_path=self.dest_dir_path,
             pigz=self.pigz, pbzip2=self.pbzip2, gatk=self.gatk,
