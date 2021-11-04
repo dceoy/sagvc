@@ -36,7 +36,8 @@ class PreprocessIntervals(SagvcTask):
         )
 
     def run(self):
-        run_id = Path(self.interval_list_path or self.fa_path).stem
+        output_interval_list = Path(self.output().path)
+        run_id = output_interval_list.stem
         self.print_log(f'Prepare bins for coverage collection:\t{run_id}')
         fa = Path(self.fa_path).resolve()
         interval_list = (
@@ -53,7 +54,6 @@ class PreprocessIntervals(SagvcTask):
                 else {'bin-length': 1000, 'padding': 0}
             )
         )
-        output_interval_list = Path(self.output().path)
         self.setup_shell(
             run_id=run_id, commands=self.gatk,
             cwd=output_interval_list.parent, **self.sh_config,
@@ -462,6 +462,7 @@ class CallCopyRatioSegmentsTumor(luigi.Task):
     interval_list_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
+    r = luigi.Parameter(default='R')
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
@@ -511,7 +512,7 @@ class CallCopyRatioSegmentsTumor(luigi.Task):
             preproc_interval_list_path=(
                 self.preproc_interval_list_path or self.input()[2].path
             ),
-            dest_dir_path=self.dest_dir_path, gatk=self.gatk,
+            dest_dir_path=self.dest_dir_path, gatk=self.gatk, r=self.r,
             save_memory=self.save_memory, n_cpu=self.n_cpu,
             memory_mb=self.memory_mb, sh_config=self.sh_config
         )
@@ -526,6 +527,7 @@ class CallCopyRatioSegmentsNormal(luigi.Task):
     interval_list_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
+    r = luigi.Parameter(default='R')
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
@@ -573,7 +575,7 @@ class CallCopyRatioSegmentsNormal(luigi.Task):
             preproc_interval_list_path=(
                 self.preproc_interval_list_path or self.input()[1].path
             ),
-            dest_dir_path=self.dest_dir_path, gatk=self.gatk,
+            dest_dir_path=self.dest_dir_path, gatk=self.gatk, r=self.r,
             save_memory=self.save_memory, n_cpu=self.n_cpu,
             memory_mb=self.memory_mb, sh_config=self.sh_config
         )

@@ -197,10 +197,8 @@ def main():
                     cnv_blacklist_path=args['--cnv-blacklist'],
                     dest_dir_path=args['--dest-dir'],
                     **{
-                        c: fetch_executable(c) for c in [
-                            'pbzip2', 'bgzip', 'pigz', 'samtools', 'tabix',
-                            'gatk', 'bedtools'
-                        ]
+                        c: fetch_executable(c)
+                        for c in ['gatk', 'bgzip', 'tabix',  'bedtools']
                     },
                     cnvkitpy=fetch_executable('cnvkit.py'),
                     n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,

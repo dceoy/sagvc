@@ -108,10 +108,6 @@ class CreateWgsIntervalList(SagvcTask):
 class CreateWgsIntervalListBeds(SagvcTask):
     fa_path = luigi.Parameter()
     dest_dir_path = luigi.Parameter(default='.')
-    pigz = luigi.Parameter(default='pigz')
-    pbzip2 = luigi.Parameter(default='pbzip2')
-    samtools = luigi.Parameter(default='samtools')
-    gatk = luigi.Parameter(default='gatk')
     bedtools = luigi.Parameter(default='bedtools')
     bgzip = luigi.Parameter(default='bgzip')
     tabix = luigi.Parameter(default='tabix')
@@ -141,10 +137,8 @@ class CreateWgsIntervalListBeds(SagvcTask):
             ),
             CreateExclusionIntervalListBed(
                 interval_list_path=self.input().path, fa_path=self.fa_path,
-                dest_dir_path=self.dest_dir_path, pigz=self.pigz,
-                pbzip2=self.pbzip2, samtools=self.samtools, gatk=self.gatk,
-                bedtools=self.bedtools, bgzip=self.bgzip, tabix=self.tabix,
-                n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                dest_dir_path=self.dest_dir_path, bedtools=self.bedtools,
+                bgzip=self.bgzip, tabix=self.tabix, n_cpu=self.n_cpu,
                 sh_config=self.sh_config
             )
         ]
@@ -222,8 +216,8 @@ class CreateExclusionIntervalListBed(SagvcTask):
         dest_dir = excl_bed.parent
         genome_bed = dest_dir.joinpath(f'{fai.stem}.bed')
         self.setup_shell(
-            run_id=run_id, commands=[self.bgzip, self.tabix], cwd=dest_dir,
-            **self.sh_config
+            run_id=run_id, commands=[self.bedtools, self.bgzip, self.tabix],
+            cwd=dest_dir, **self.sh_config
         )
         self.run_shell(
             args=(

@@ -27,9 +27,6 @@ class PrepareTargetedReosourceFiles(luigi.Task):
     gatk = luigi.Parameter(default='gatk')
     bgzip = luigi.Parameter(default='bgzip')
     tabix = luigi.Parameter(default='tabix')
-    pigz = luigi.Parameter(default='pigz')
-    pbzip2 = luigi.Parameter(default='pbzip2')
-    samtools = luigi.Parameter(default='samtools')
     bedtools = luigi.Parameter(default='bedtools')
     cnvkitpy = luigi.Parameter(default='cnvkit.py')
     n_cpu = luigi.IntParameter(default=1)
@@ -73,10 +70,8 @@ class PrepareTargetedReosourceFiles(luigi.Task):
             ),
             CreateExclusionIntervalListBed(
                 interval_list_path=interval_list_path, fa_path=self.fa_path,
-                dest_dir_path=self.dest_dir_path, pigz=self.pigz,
-                pbzip2=self.pbzip2, samtools=self.samtools, gatk=self.gatk,
-                bedtools=self.bedtools, bgzip=self.bgzip, tabix=self.tabix,
-                n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                dest_dir_path=self.dest_dir_path, bedtools=self.bedtools,
+                bgzip=self.bgzip, tabix=self.tabix, n_cpu=self.n_cpu,
                 sh_config=self.sh_config
             )
         ]
@@ -84,8 +79,6 @@ class PrepareTargetedReosourceFiles(luigi.Task):
             CreateCnvAcccessBed(
                 fa_path=self.fa_path, excl_bed_path=input_targets[1][2].path,
                 dest_dir_path=self.dest_dir_path, cnvkitpy=self.cnvkitpy,
-                pigz=self.pigz, pbzip2=self.pbzip2, samtools=self.samtools,
-                gatk=self.gatk, bgzip=self.bgzip, tabix=self.tabix,
                 n_cpu=self.n_cpu, memory_mb=self.memory_mb,
                 sh_config=self.sh_config
             ),
@@ -168,18 +161,15 @@ class DownloadAndProcessRegionFiles(luigi.Task):
         cnv_blacklist_path = self.input()[1][0].path
         yield [
             CreateWgsIntervalListBeds(
-                fa_path=fa_path, dest_dir_path=dest_dir_path, pigz=self.pigz,
-                pbzip2=self.pbzip2, samtools=self.samtools, gatk=self.gatk,
+                fa_path=fa_path, dest_dir_path=dest_dir_path, gatk=self.gatk,
                 bedtools=self.bedtools, bgzip=self.bgzip, tabix=self.tabix,
                 n_cpu=self.n_cpu, memory_mb=self.memory_mb,
                 sh_config=self.sh_config
             ),
             CreateCnvAcccessBed(
                 fa_path=fa_path, dest_dir_path=dest_dir_path,
-                cnvkitpy=self.cnvkitpy, pigz=self.pigz, pbzip2=self.pbzip2,
-                samtools=self.samtools, gatk=self.gatk, bgzip=self.bgzip,
-                tabix=self.tabix, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-                sh_config=self.sh_config
+                cnvkitpy=self.cnvkitpy, n_cpu=self.n_cpu,
+                memory_mb=self.memory_mb, sh_config=self.sh_config
             ),
             *[
                 PreprocessIntervals(
@@ -356,8 +346,7 @@ class DownloadAndProcessGnomadVcf(luigi.Task):
         yield CreateBiallelicSnpIntervalList(
             input_vcf_path=self.input()[0][0].path,
             fa_path=self.input()[1][0].path, dest_dir_path=self.dest_dir_path,
-            pigz=self.pigz, pbzip2=self.pbzip2, gatk=self.gatk,
-            samtools=self.samtools, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+            gatk=self.gatk, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
             sh_config=self.sh_config
         )
 
