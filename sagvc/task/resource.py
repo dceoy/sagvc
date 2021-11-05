@@ -337,39 +337,6 @@ class CreateIntervalListWithBed(SagvcTask):
         )
 
 
-class DecompressBgzipFile(SagvcTask):
-    bgz_path = luigi.Parameter()
-    bgzip = luigi.Parameter(default='bgzip')
-    dest_dir_path = luigi.Parameter(default='.')
-    n_cpu = luigi.IntParameter(default=1)
-    sh_config = luigi.DictParameter(default=dict())
-    priority = 60
-
-    def output(self):
-        return luigi.LocalTarget(
-            Path(self.dest_dir_path).resolve().joinpath(
-                Path(self.bgz_path).stem
-            )
-        )
-
-    def run(self):
-        output_file = Path(self.output().path)
-        run_id = output_file.stem
-        self.print_log(f'Decompress bgzip BED:\t{run_id}')
-        bgz = Path(self.bgz_path).resolve()
-        self.setup_shell(
-            run_id=run_id, commands=self.bgzip, cwd=output_file.parent,
-            **self.sh_config
-        )
-        self.run_shell(
-            args=(
-                f'set -e && {self.bgzip} -@ {self.n_cpu} -dc {bgz}'
-                + f' > {output_file}'
-            ),
-            input_files_or_dirs=bgz, output_files_or_dirs=output_file
-        )
-
-
 class SplitEvaluationIntervals(SagvcTask):
     fa_path = luigi.Parameter()
     interval_list_path = luigi.Parameter(default='')

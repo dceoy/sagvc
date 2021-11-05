@@ -134,56 +134,6 @@ class CollectAllelicCounts(SagvcTask):
         )
 
 
-class CollectAllelicCountsTumor(luigi.WrapperTask):
-    tumor_cram_path = luigi.Parameter()
-    fa_path = luigi.Parameter()
-    snp_interval_list_path = luigi.Parameter()
-    dest_dir_path = luigi.Parameter(default='.')
-    gatk = luigi.Parameter(default='gatk')
-    save_memory = luigi.BoolParameter(default=False)
-    n_cpu = luigi.IntParameter(default=1)
-    memory_mb = luigi.FloatParameter(default=4096)
-    sh_config = luigi.DictParameter(default=dict())
-    priority = 30
-
-    def requires(self):
-        return CollectAllelicCounts(
-            cram_path=self.tumor_cram_path, fa_path=self.fa_path,
-            snp_interval_list_path=self.snp_interval_list_path,
-            dest_dir_path=self.dest_dir_path, gatk=self.gatk,
-            save_memory=self.save_memory, n_cpu=self.n_cpu,
-            memory_mb=self.memory_mb, sh_config=self.sh_config
-        )
-
-    def output(self):
-        return self.input()
-
-
-class CollectAllelicCountsNormal(luigi.WrapperTask):
-    normal_cram_path = luigi.Parameter()
-    fa_path = luigi.Parameter()
-    snp_interval_list_path = luigi.Parameter()
-    dest_dir_path = luigi.Parameter(default='.')
-    gatk = luigi.Parameter(default='gatk')
-    save_memory = luigi.BoolParameter(default=False)
-    n_cpu = luigi.IntParameter(default=1)
-    memory_mb = luigi.FloatParameter(default=4096)
-    sh_config = luigi.DictParameter(default=dict())
-    priority = 30
-
-    def requires(self):
-        return CollectAllelicCounts(
-            cram_path=self.normal_cram_path, fa_path=self.fa_path,
-            snp_interval_list_path=self.snp_interval_list_path,
-            dest_dir_path=self.dest_dir_path, gatk=self.gatk,
-            save_memory=self.save_memory, n_cpu=self.n_cpu,
-            memory_mb=self.memory_mb, sh_config=self.sh_config
-        )
-
-    def output(self):
-        return self.input()
-
-
 class CollectReadCounts(SagvcTask):
     cram_path = luigi.Parameter()
     fa_path = luigi.Parameter()
@@ -468,16 +418,8 @@ class CallCopyRatioSegmentsTumor(luigi.Task):
     sh_config = luigi.DictParameter(default=dict())
     priority = 30
 
-    def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            self.create_matched_id(self.tumor_cram_path, self.normal_cram_path)
-        )
-        return luigi.LocalTarget(
-            run_dir.joinpath(f'{run_dir.name}.cr.called.seg')
-        )
-
-    def run(self):
-        input_targets = [
+    def requires(self):
+        return [
             *[
                 CollectAllelicCounts(
                     cram_path=p, fa_path=self.fa_path,
@@ -500,6 +442,17 @@ class CallCopyRatioSegmentsTumor(luigi.Task):
                 ]
             )
         ]
+
+    def output(self):
+        run_dir = Path(self.dest_dir_path).resolve().joinpath(
+            self.create_matched_id(self.tumor_cram_path, self.normal_cram_path)
+        )
+        return luigi.LocalTarget(
+            run_dir.joinpath(f'{run_dir.name}.cr.called.seg')
+        )
+
+    def run(self):
+        input_file_paths = [p for p in self.input()]
         yield CallCopyRatioSegments(
             cram_path=self.tumor_cram_path, fa_path=self.fa_path,
             fa_dict_path=str(
@@ -507,10 +460,10 @@ class CallCopyRatioSegmentsTumor(luigi.Task):
                     Path(self.fa_path).stem + '.dict'
                 )
             ),
-            case_allelic_counts_tsv_path=input_targets[0].path,
-            normal_allelic_counts_tsv_path=input_targets[1].path,
+            case_allelic_counts_tsv_path=input_file_paths[0],
+            normal_allelic_counts_tsv_path=input_file_paths[1],
             preproc_interval_list_path=(
-                self.preproc_interval_list_path or self.input()[2].path
+                self.preproc_interval_list_path or input_file_paths[2]
             ),
             dest_dir_path=self.dest_dir_path, gatk=self.gatk, r=self.r,
             save_memory=self.save_memory, n_cpu=self.n_cpu,
@@ -533,16 +486,8 @@ class CallCopyRatioSegmentsNormal(luigi.Task):
     sh_config = luigi.DictParameter(default=dict())
     priority = 30
 
-    def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            Path(self.normal_cram_path).stem
-        )
-        return luigi.LocalTarget(
-            run_dir.joinpath(f'{run_dir.name}.cr.called.seg')
-        )
-
-    def run(self):
-        input_targets = [
+    def requires(self):
+        return [
             CollectAllelicCounts(
                 cram_path=self.normal_cram_path, fa_path=self.fa_path,
                 snp_interval_list_path=self.snp_interval_list_path,
@@ -563,6 +508,17 @@ class CallCopyRatioSegmentsNormal(luigi.Task):
                 ]
             )
         ]
+
+    def output(self):
+        run_dir = Path(self.dest_dir_path).resolve().joinpath(
+            Path(self.normal_cram_path).stem
+        )
+        return luigi.LocalTarget(
+            run_dir.joinpath(f'{run_dir.name}.cr.called.seg')
+        )
+
+    def run(self):
+        input_file_paths = [p for p in self.input()]
         yield CallCopyRatioSegments(
             cram_path=self.normal_cram_path, fa_path=self.fa_path,
             fa_dict_path=str(
@@ -571,9 +527,9 @@ class CallCopyRatioSegmentsNormal(luigi.Task):
                 )
             ),
             case_allelic_counts_tsv_path='',
-            normal_allelic_counts_tsv_path=input_targets[0].path,
+            normal_allelic_counts_tsv_path=input_file_paths[0],
             preproc_interval_list_path=(
-                self.preproc_interval_list_path or self.input()[1].path
+                self.preproc_interval_list_path or input_file_paths[1]
             ),
             dest_dir_path=self.dest_dir_path, gatk=self.gatk, r=self.r,
             save_memory=self.save_memory, n_cpu=self.n_cpu,
