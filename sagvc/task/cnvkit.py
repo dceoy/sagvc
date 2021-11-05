@@ -21,7 +21,7 @@ class CreateCnvAcccessBed(SagvcTask):
         return luigi.LocalTarget(
             Path(self.dest_dir_path).resolve().joinpath(
                 Path(self.fa_path).stem + (
-                    ('.excluding.' + Path(self.excl_bed_path).stem)
+                    ('.excl.' + Path(self.excl_bed_path).stem)
                     if self.excl_bed_path else ''
                 ) + '.access.bed'
             )

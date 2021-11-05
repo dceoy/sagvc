@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import re
 import sys
 from pathlib import Path
 
@@ -16,13 +17,14 @@ from .core import SagvcTask
 from .msisensor import ScanMicrosatellites
 from .resource import (CreateBiallelicSnpIntervalList,
                        CreateExclusionIntervalListBed, CreateIntervalListBed,
-                       CreateIntervalListWithBed, CreateWgsIntervalListBeds)
+                       CreateIntervalListWithBed, CreateWgsIntervalListBeds,
+                       IntersectBed)
 
 
 class PrepareTargetedReosourceFiles(luigi.Task):
     bed_path = luigi.Parameter()
     fa_path = luigi.Parameter()
-    cnv_blacklist_path = luigi.Parameter()
+    cnv_blacklist_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
     bgzip = luigi.Parameter(default='bgzip')
@@ -45,18 +47,21 @@ class PrepareTargetedReosourceFiles(luigi.Task):
 
     def output(self):
         dest_dir = Path(self.dest_dir_path).resolve()
-        bed_stem = Path(self.bed_path).stem
-        fa_stem = Path(self.fa_path).stem
+        bed_stem = Path(re.sub(r'\.gz', '', self.bed_path)).stem
         return [
             luigi.LocalTarget(dest_dir.joinpath(n)) for n in [
                 f'{bed_stem}.interval_list', f'{bed_stem}.bed.gz',
                 f'{bed_stem}.bed.gz.tbi', f'{bed_stem}.bed',
-                f'{bed_stem}.excl.bed.gz',
-                f'{bed_stem}.excl.bed.gz.tbi',
-                f'{bed_stem}.excl.bed',
-                f'{fa_stem}.excluding.{bed_stem}.excl.access.bed',
-                f'{fa_stem}.{bed_stem}.preprocessed.wgs.interval_list',
-                f'{fa_stem}.{bed_stem}.preprocessed.wxs.interval_list'
+                f'{bed_stem}.excl.bed.gz', f'{bed_stem}.excl.bed.gz.tbi',
+                f'{bed_stem}.excl.bed', f'{bed_stem}.access.bed',
+                *[
+                    (
+                        bed_stem + (
+                            ('.excl.' + Path(self.cnv_blacklist_path).stem)
+                            if self.cnv_blacklist_path else ''
+                        ) + f'.w{r}s.preproc.interval_list'
+                    ) for r in ['x', 'g']
+                ]
             ]
         ]
 
@@ -73,13 +78,19 @@ class PrepareTargetedReosourceFiles(luigi.Task):
                 dest_dir_path=self.dest_dir_path, bedtools=self.bedtools,
                 bgzip=self.bgzip, tabix=self.tabix, n_cpu=self.n_cpu,
                 sh_config=self.sh_config
+            ),
+            CreateCnvAcccessBed(
+                fa_path=self.fa_path, dest_dir_path=self.dest_dir_path,
+                cnvkitpy=self.cnvkitpy, n_cpu=self.n_cpu,
+                memory_mb=self.memory_mb, sh_config=self.sh_config
             )
         ]
         yield [
-            CreateCnvAcccessBed(
-                fa_path=self.fa_path, excl_bed_path=input_targets[1][2].path,
-                dest_dir_path=self.dest_dir_path, cnvkitpy=self.cnvkitpy,
-                n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+            IntersectBed(
+                input_bed_paths=[
+                    input_targets[2].path, input_targets[0][0].path
+                ],
+                output_bed_path=self.output()[7].path, bedtools=self.bedtools,
                 sh_config=self.sh_config
             ),
             *[

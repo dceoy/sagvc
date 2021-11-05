@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import re
 import sys
 from pathlib import Path
 
@@ -77,10 +78,9 @@ class CreateWgsIntervalList(SagvcTask):
         run_id = fa.stem
         self.print_log(f'Create a WGS interval list:\t{run_id}')
         output_interval_list = Path(self.output().path)
-        dest_dir = output_interval_list.parent
-        raw_interval_list = dest_dir.joinpath(f'{fa.stem}.raw.interval_list')
         self.setup_shell(
-            run_id=run_id, commands=self.gatk, cwd=dest_dir, **self.sh_config,
+            run_id=run_id, commands=self.gatk, cwd=output_interval_list.parent,
+            **self.sh_config,
             env={'JAVA_TOOL_OPTIONS': '-Xmx{}m'.format(int(self.memory_mb))}
         )
         self.run_shell(
@@ -88,20 +88,10 @@ class CreateWgsIntervalList(SagvcTask):
                 f'set -e && {self.gatk} ScatterIntervalsByNs'
                 + f' --REFERENCE {fa}'
                 + ' --OUTPUT_TYPE ACGT'
-                + f' --OUTPUT {raw_interval_list}'
+                + f' --OUTPUT {output_interval_list}'
             ),
-            input_files_or_dirs=fa, output_files_or_dirs=raw_interval_list
+            input_files_or_dirs=fa, output_files_or_dirs=output_interval_list
         )
-        self.run_shell(
-            args=(
-                'set -e && grep'
-                + ' -e \'^@\' -e \'^chr[0-9XYM]\\+\\s\''
-                + f' {raw_interval_list} > {output_interval_list}'
-            ),
-            input_files_or_dirs=raw_interval_list,
-            output_files_or_dirs=output_interval_list
-        )
-        self.remove_files_and_dirs(raw_interval_list)
 
 
 @requires(CreateWgsIntervalList)
@@ -160,11 +150,11 @@ class CreateIntervalListBed(SagvcTask):
         return [luigi.LocalTarget(f'{bed}{s}') for s in ['.gz', '.gz.tbi', '']]
 
     def run(self):
-        run_id = Path(self.interval_list_path).stem
+        bed = Path(self.output()[2].path)
+        run_id = bed.stem
         self.print_log(f'Create an interval_list BED:\t{run_id}')
         interval_list = Path(self.interval_list_path).resolve()
         bed_gz = Path(self.output()[0].path)
-        bed = Path(self.output()[2].path)
         pyscript = Path(__file__).resolve().parent.parent.joinpath(
             'script/interval_list2bed.py'
         )
@@ -221,7 +211,7 @@ class CreateExclusionIntervalListBed(SagvcTask):
         )
         self.run_shell(
             args=(
-                f'set -eo pipefail && {sys.executable}'
+                f'set -e && {sys.executable}'
                 + ' -c \'{}\''.format(
                     'from fileinput import input; '
                     '[print("{0}\\t0\\t{1}".format(*s.split()[:2]))'
@@ -307,7 +297,10 @@ class CreateIntervalListWithBed(SagvcTask):
     def output(self):
         dest_dir = Path(self.dest_dir_path).resolve()
         return luigi.LocalTarget(
-            dest_dir.joinpath(Path(self.bed_path).stem + '.interval_list')
+            dest_dir.joinpath(
+                Path(re.sub(r'\.gz', '', self.bed_path)).stem
+                + '.interval_list'
+            )
         )
 
     def run(self):
@@ -455,6 +448,39 @@ class CreateBiallelicSnpIntervalList(SagvcTask):
             ),
             input_files_or_dirs=[snp_vcf, fa],
             output_files_or_dirs=output_interval_list
+        )
+
+
+class IntersectBed(SagvcTask):
+    input_bed_paths = luigi.ListParameter()
+    output_bed_path = luigi.Parameter()
+    bedtools = luigi.Parameter(default='bedtools')
+    sh_config = luigi.DictParameter(default=dict())
+    priority = 70
+
+    def output(self):
+        return luigi.LocalTarget(
+            Path(self.output_bed_path).resolve()
+        )
+
+    def run(self):
+        assert len(self.input_bed_paths) > 1
+        output_bed = Path(self.output().path)
+        run_id = Path(output_bed.stem).stem
+        self.print_log(f'Create an intersect BED:\t{run_id}')
+        input_beds = [Path(p).resolve() for p in self.input_bed_paths]
+        self.setup_shell(
+            run_id=run_id, commands=self.bedtools, cwd=output_bed.parent,
+            **self.sh_config
+        )
+        self.run_shell(
+            args=(
+                f'set -e && {self.bedtools} intersect'
+                + f' -a {input_beds[0]} -b'
+                + ''.join([f' {b}' for b in input_beds[1:]])
+                + f' > {output_bed}'
+            ),
+            input_files_or_dirs=input_beds, output_files_or_dirs=output_bed
         )
 
 

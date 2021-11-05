@@ -66,7 +66,7 @@ Options:
     --use-gnomad-v3         Use gnomAD v3 instead of v2
     --use-msisensor-pro     Use MSIsensor-pro instead of MSIsensor
     --dest-dir=<path>       Specify a destination directory path [default: .]
-    --cnv-blacklist=<path>  Specify a path to a CNV blacklist file
+    --cnv-blacklist=<path>  Specify a path to a CNV blacklist file for GATK
     --src-path=<path>       Specify a source file path
     --src-url=<url>         Specify a source URL
     --interval-list=<path>, --bed=<path>
@@ -189,12 +189,11 @@ def main():
             workers=n_worker, log_level=log_level
         )
     elif args['target']:
-        assert bool(args['--cnv-blacklist']), '--cnv-blacklist required'
         build_luigi_tasks(
             tasks=[
                 PrepareTargetedReosourceFiles(
                     bed_path=args['<bed_path>'], fa_path=args['<fa_path>'],
-                    cnv_blacklist_path=args['--cnv-blacklist'],
+                    cnv_blacklist_path=(args['--cnv-blacklist'] or ''),
                     dest_dir_path=args['--dest-dir'],
                     **{
                         c: fetch_executable(c)
@@ -224,8 +223,7 @@ def main():
             log_level=log_level
         )
     elif args['haplotypecaller']:
-        for k in ['--resource-vcf', '--dbsnp-vcf']:
-            assert bool(args[k]), f'{k} required'
+        assert bool(args['--resource-vcf']), '--resource-vcf required'
         build_luigi_tasks(
             tasks=[
                 FilterVariantTranches(

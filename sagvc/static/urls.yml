@@ -8,4 +8,4 @@ hapmap_vcf: https://storage.googleapis.com/genomics-public-data/resources/broad/
 kg_snps_vcf: https://storage.googleapis.com/genomics-public-data/resources/broad/hg38/v0/1000G_phase1.snps.high_confidence.hg38.vcf.gz
 cnv_blacklist: https://storage.googleapis.com/gatk-best-practices/somatic-hg38/CNV_and_centromere_blacklist.hg38liftover.list
 refflat_txt: https://hgdownload.cse.ucsc.edu/goldenpath/hg38/database/refFlat.txt.gz
-# evaluation_interval: https://storage.googleapis.com/genomics-public-data/resources/broad/hg38/v0/wgs_calling_regions.hg38.interval_list
+# refseq_gff3: https://ftp.ncbi.nlm.nih.gov/genomes/refseq/vertebrate_mammalian/Homo_sapiens/all_assembly_versions/GCF_000001405.26_GRCh38/GRCh38_major_release_seqs_for_alignment_pipelines/GCA_000001405.15_GRCh38_full_analysis_set.refseq_annotation.gff.gz
