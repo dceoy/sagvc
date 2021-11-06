@@ -14,8 +14,8 @@ from .resource import SplitEvaluationIntervals
 class GetPileupSummaries(SagvcTask):
     cram_path = luigi.Parameter()
     fa_path = luigi.Parameter()
-    interval_list_path = luigi.Parameter()
     common_biallelic_vcf_path = luigi.Parameter()
+    interval_list_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
     save_memory = luigi.BoolParameter(default=False)
@@ -38,10 +38,13 @@ class GetPileupSummaries(SagvcTask):
         self.print_log(f'Get pileup summary:\t{run_id}')
         output_pileup_table = Path(self.output().path)
         fa = Path(self.fa_path).resolve()
-        interval_list = Path(self.interval_list_path).resolve()
         common_biallelic_vcf = Path(
             self.common_biallelic_vcf_path
         ).resolve()
+        interval_list = (
+            Path(self.interval_list_path).resolve()
+            if self.interval_list_path else None
+        )
         self.setup_shell(
             run_id=run_id, commands=self.gatk, cwd=output_pileup_table.parent,
             **self.sh_config,
@@ -57,13 +60,14 @@ class GetPileupSummaries(SagvcTask):
                 + f' --input {cram}'
                 + f' --reference {fa}'
                 + f' --variant {common_biallelic_vcf}'
-                + f' --intervals {interval_list}'
+                + (f' --intervals {interval_list}' if interval_list else '')
                 + f' --output {output_pileup_table}'
                 + ' --disable-bam-index-caching '
                 + str(self.save_memory).lower()
             ),
             input_files_or_dirs=[
-                cram, fa, interval_list, common_biallelic_vcf
+                cram, fa, common_biallelic_vcf,
+                *([interval_list] if interval_list else list())
             ],
             output_files_or_dirs=output_pileup_table
         )
@@ -75,12 +79,25 @@ class CalculateContamination(SagvcTask):
     fa_path = luigi.Parameter()
     common_biallelic_vcf_path = luigi.Parameter()
     interval_list_path = luigi.Parameter(default='')
+    dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
     save_memory = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
     priority = 50
+
+    def requires(self):
+        return [
+            GetPileupSummaries(
+                cram_path=p, fa_path=self.fa_path,
+                interval_list_path=self.interval_list_path,
+                common_biallelic_vcf_path=self.common_biallelic_vcf_path,
+                dest_dir_path=self.dest_dir_path, gatk=self.gatk,
+                save_memory=self.save_memory, n_cpu=self.n_cpu,
+                memory_mb=self.memory_mb, sh_config=self.sh_config
+            ) for p in [self.tumor_cram_path, self.normal_cram_path]
+        ]
 
     def output(self):
         run_dir = Path(self.dest_dir_path).resolve().joinpath(
@@ -94,19 +111,9 @@ class CalculateContamination(SagvcTask):
     def run(self):
         output_contamination_table = Path(self.output()[0].path)
         run_dir = output_contamination_table.parent
-        input_targets = yield [
-            GetPileupSummaries(
-                cram_path=p, fa_path=self.fa_path,
-                interval_list_path=self.interval_list_path,
-                common_biallelic_vcf_path=self.common_biallelic_vcf_path,
-                dest_dir_path=str(run_dir), gatk=self.gatk,
-                save_memory=self.save_memory, n_cpu=self.n_cpu,
-                memory_mb=self.memory_mb, sh_config=self.sh_config
-            ) for p in [self.tumor_cram_path, self.normal_cram_path]
-        ]
         run_id = '.'.join(output_contamination_table.name.split('.')[:-2])
         self.print_log(f'Calculate cross-sample contamination:\t{run_id}')
-        pileup_tables = [Path(i.path) for i in input_targets]
+        pileup_tables = [Path(i.path) for i in input()]
         output_segment_table = Path(self.output()[1].path)
         self.setup_shell(
             run_id=run_id, commands=self.gatk, cwd=run_dir, **self.sh_config,

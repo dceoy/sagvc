@@ -13,14 +13,13 @@ Usage:
         [--src-path=<path>|--src-url=<url>] [--dest-dir=<path>]
     sagvc haplotypecaller [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>]
-        [--interval-list=<path>|--bed=<path>] [--dbsnp-vcf=<path>]
-        (--resource-vcf=<path>) <fa_path> <normal_sam_path>
+        [--interval-list=<path>] [--dbsnp-vcf=<path>] (--resource-vcf=<path>)
+        <fa_path> <normal_sam_path>
     sagvc mutect2 [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>]
-        [--interval-list=<path>|--bed=<path>]
-        [--biallelic-snp-vcf==<path>] [--germline-resource-vcf=<path>]
-        [--tumor-sample=<name>] [--normal-sample=<name>] <fa_path>
-        <tumor_sam_path> <normal_sam_path>
+        [--interval-list=<path>] [--biallelic-snp-vcf==<path>]
+        [--germline-resource-vcf=<path>] [--tumor-sample=<name>]
+        [--normal-sample=<name>] <fa_path> <tumor_sam_path> <normal_sam_path>
     sagvc delly [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--excl-bed=<path>]
         [--tumor-sample=<name>] [--normal-sample=<name>] <fa_path>
@@ -69,8 +68,7 @@ Options:
     --cnv-blacklist=<path>  Specify a path to a CNV blacklist file for GATK
     --src-path=<path>       Specify a source file path
     --src-url=<url>         Specify a source URL
-    --interval-list=<path>, --bed=<path>
-                            Specify a path to an interval_list or BED file
+    --interval-list=<path>  Specify a path to an interval_list file
     --dbsnp-vcf=<path>      Specify a path to a dbSNP VCF file
     --resource-vcf=<path>   Specify a path to a known SNP and INDEL VCF file
     --biallelic-snp-vcf=<path>
@@ -81,6 +79,7 @@ Options:
     --tumor-sample=<name>   Specify a tumor sample name
     --normal-sample=<name>  Specify a normal sample name
     --exome                 Set options for WES input
+    --bed=<path>            Specify a path to a BED file
     --seq-method=<type>     Specify a sequencing assay type [default: wgs]
     --access-bed=<path>     Specify a path to a CNV accessible region BED file
     --refflat-txt=<path>    Specify a path to a refFlat text file
@@ -231,16 +230,13 @@ def main():
                     fa_path=args['<fa_path>'],
                     dbsnp_vcf_path=(args['--dbsnp-vcf'] or ''),
                     resource_vcf_paths=args['--resource-vcf'],
+                    interval_list_path=(args['--interval-list'] or ''),
                     dest_dir_path=args['--dest-dir'],
                     gatk=fetch_executable('gatk'),
                     samtools=fetch_executable('samtools'),
                     save_memory=(memory_mb_per_worker < 8192),
                     n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
-                    sh_config=sh_config,
-                    interval_list_path=(
-                        args['--interval-list'] or args['--bed'] or ''
-                    ),
-                    scatter_count=n_cpu
+                    sh_config=sh_config, scatter_count=n_worker
                 )
             ],
             workers=n_worker, log_level=log_level
@@ -258,16 +254,13 @@ def main():
                     normal_sample_name=args['--normal-sample'],
                     common_biallelic_snp_vcf_path=args['--biallelic-snp-vcf'],
                     germline_resource_vcf_path=args['--germline-resource-vcf'],
+                    interval_list_path=(args['--interval-list'] or ''),
                     dest_dir_path=args['--dest-dir'],
                     gatk=fetch_executable('gatk'),
                     samtools=fetch_executable('samtools'),
                     save_memory=(memory_mb_per_worker < 8192),
                     n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
-                    sh_config=sh_config,
-                    interval_list_path=(
-                        args['--interval-list'] or args['--bed'] or ''
-                    ),
-                    scatter_count=n_cpu
+                    sh_config=sh_config, scatter_count=n_worker
                 )
             ],
             workers=n_worker, log_level=log_level
