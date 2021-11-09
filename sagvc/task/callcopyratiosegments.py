@@ -16,7 +16,9 @@ class PreprocessIntervals(SagvcTask):
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
     exome = luigi.BoolParameter(default=False)
-    param_dict = luigi.DictParameter(default=dict())
+    add_preprocessintervals_args = luigi.ListParameter(
+        default=['--interval-merging-rule', 'OVERLAPPING_ONLY']
+    )
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
@@ -47,12 +49,17 @@ class PreprocessIntervals(SagvcTask):
             Path(self.cnv_blacklist_path).resolve()
             if self.cnv_blacklist_path else None
         )
-        param_dict = (
-            self.param_dict or (
-                {'bin-length': 0, 'padding': 250} if self.exome
-                else {'bin-length': 1000, 'padding': 0}
+        add_preprocessintervals_args = [
+            *self.add_preprocessintervals_args,
+            *(
+                list() if '--bin-length' in self.add_preprocessintervals_args
+                else ['--bin-length', (0 if self.exome else 1000)]
+            ),
+            *(
+                list() if '--padding' in self.add_preprocessintervals_args
+                else ['--padding', (250 if self.exome else 0)]
             )
-        )
+        ]
         self.setup_shell(
             run_id=run_id, commands=self.gatk,
             cwd=output_interval_list.parent, **self.sh_config,
@@ -71,8 +78,7 @@ class PreprocessIntervals(SagvcTask):
                     f' --exclude-intervals {cnv_blacklist}'
                     if cnv_blacklist else ''
                 )
-                + ''.join(f' --{k} {v}' for k, v in param_dict.items())
-                + ' --interval-merging-rule OVERLAPPING_ONLY'
+                + ''.join(f' {a}' for a in add_preprocessintervals_args)
                 + f' --output {output_interval_list}'
             ),
             input_files_or_dirs=[
@@ -88,6 +94,7 @@ class CollectAllelicCounts(SagvcTask):
     fa_path = luigi.Parameter()
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
+    add_collectalleliccounts_args = luigi.ListParameter(default=list())
     save_memory = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
@@ -121,12 +128,19 @@ class CollectAllelicCounts(SagvcTask):
         self.run_shell(
             args=(
                 f'set -e && {self.gatk} CollectAllelicCounts'
-                + f' --intervals {snp_interval_list}'
                 + f' --input {cram}'
                 + f' --reference {fa}'
+                + f' --intervals {snp_interval_list}'
+                + ''.join(
+                    f' {a}' for a in [
+                        *self.add_collectalleliccounts_args,
+                        *(
+                            ['--disable-bam-index-caching', 'true']
+                            if self.save_memory else list()
+                        )
+                    ]
+                )
                 + f' --output {allelic_counts_tsv}'
-                + ' --disable-bam-index-caching '
-                + str(self.save_memory).lower()
             ),
             input_files_or_dirs=[cram, snp_interval_list, fa],
             output_files_or_dirs=allelic_counts_tsv
@@ -139,6 +153,9 @@ class CollectReadCounts(SagvcTask):
     preproc_interval_list_path = luigi.Parameter()
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
+    add_collectreadcounts_args = luigi.ListParameter(
+        default=['--interval-merging-rule', 'OVERLAPPING_ONLY']
+    )
     save_memory = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
@@ -176,10 +193,16 @@ class CollectReadCounts(SagvcTask):
                 + f' --reference {fa}'
                 + f' --intervals {preproc_interval_list}'
                 + ' --format HDF5'
-                + ' --interval-merging-rule OVERLAPPING_ONLY'
+                + ''.join(
+                    f' {a}' for a in [
+                        *self.add_collectreadcounts_args,
+                        *(
+                            ['--disable-bam-index-caching', 'true']
+                            if self.save_memory else list()
+                        )
+                    ]
+                )
                 + f' --output {counts_hdf5}'
-                + ' --disable-bam-index-caching '
-                + str(self.save_memory).lower()
             ),
             input_files_or_dirs=[cram, fa, preproc_interval_list],
             output_files_or_dirs=counts_hdf5
@@ -193,6 +216,8 @@ class DenoiseReadCounts(SagvcTask):
     gatk = luigi.Parameter(default='gatk')
     r = luigi.Parameter(default='R')
     create_plots = luigi.BoolParameter(default=True)
+    add_denoisereadcounts_args = luigi.ListParameter(default=list())
+    add_plotdenoisedcopyratios_args = luigi.ListParameter(default=list())
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
@@ -226,6 +251,7 @@ class DenoiseReadCounts(SagvcTask):
             args=(
                 f'set -e && {self.gatk} DenoiseReadCounts'
                 + f' --input {counts_hdf5}'
+                + ''.join(f' {a}' for a in self.add_denoisereadcounts_args)
                 + f' --standardized-copy-ratios {standardized_cr_tsv}'
                 + f' --denoised-copy-ratios {denoised_cr_tsv}'
             ),
@@ -239,6 +265,9 @@ class DenoiseReadCounts(SagvcTask):
                     + f' --standardized-copy-ratios {standardized_cr_tsv}'
                     + f' --denoised-copy-ratios {denoised_cr_tsv}'
                     + f' --sequence-dictionary {fa_dict}'
+                    + ''.join(
+                        f' {a}' for a in self.add_plotdenoisedcopyratios_args
+                    )
                     + f' --output {run_dir}'
                     + f' --output-prefix {run_id}'
 
@@ -259,10 +288,9 @@ class ModelSegments(SagvcTask):
     gatk = luigi.Parameter(default='gatk')
     r = luigi.Parameter(default='R')
     dest_dir_path = luigi.Parameter(default='.')
-    min_total_allele_counts = luigi.DictParameter(
-        default={'case': 0, 'normal': 30}
-    )
     create_plots = luigi.BoolParameter(default=True)
+    add_modelsegments_args = luigi.ListParameter(default=list())
+    add_plotmodeledsegments_args = luigi.ListParameter(default=list())
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
@@ -298,26 +326,36 @@ class ModelSegments(SagvcTask):
             case_allelic_counts_tsv = Path(
                 self.case_allelic_counts_tsv_path
             ).resolve()
-            allelic_count_args = (
-                f' --allelic-counts {case_allelic_counts_tsv}'
-                + f' --normal-allelic-counts {normal_allelic_counts_tsv}'
-                + ''.join(
-                    f' --minimum-total-allele-count-{k} {v}'
-                    for k, v in self.min_total_allele_counts.items()
-                )
-            )
             input_files = [
                 denoised_cr_tsv, case_allelic_counts_tsv,
                 normal_allelic_counts_tsv
             ]
-        else:
-            allelic_count_args = (
-                f' --allelic-counts {normal_allelic_counts_tsv}'
-                + ' --minimum-total-allele-count-case {}'.format(
-                    self.min_total_allele_counts['normal']
+            add_modelsegments_args = [
+                *self.add_modelsegments_args,
+                '--allelic-counts', case_allelic_counts_tsv,
+                '--normal-allelic-counts', normal_allelic_counts_tsv,
+                *(
+                    list() if '--minimum-total-allele-count-case'
+                    in self.add_modelsegments_args
+                    else ['--minimum-total-allele-count-case', 0]
+                ),
+                *(
+                    list() if '--minimum-total-allele-count-normal'
+                    in self.add_modelsegments_args
+                    else ['--minimum-total-allele-count-normal', 30]
                 )
-            )
+            ]
+        else:
             input_files = [denoised_cr_tsv, normal_allelic_counts_tsv]
+            add_modelsegments_args = [
+                *self.add_modelsegments_args,
+                '--allelic-counts', normal_allelic_counts_tsv,
+                *(
+                    list() if '--minimum-total-allele-count-case'
+                    in self.add_modelsegments_args
+                    else ['--minimum-total-allele-count-case', 30]
+                )
+            ]
         self.setup_shell(
             run_id=run_id, commands=[self.gatk, self.r], cwd=run_dir,
             **self.sh_config,
@@ -326,15 +364,14 @@ class ModelSegments(SagvcTask):
                     n_cpu=self.n_cpu, memory_mb=self.memory_mb
                 )
             }
-
         )
         self.run_shell(
             args=(
                 f'set -e && {self.gatk} ModelSegments'
                 + f' --denoised-copy-ratios {denoised_cr_tsv}'
-                + allelic_count_args
-                + f' --output-prefix {run_id}'
+                + ''.join(f' {a}' for a in add_modelsegments_args)
                 + f' --output {run_dir}'
+                + f' --output-prefix {run_id}'
             ),
             input_files_or_dirs=input_files,
             output_files_or_dirs=[*output_files, run_dir]
@@ -351,6 +388,9 @@ class ModelSegments(SagvcTask):
                     + f' --allelic-counts {het_allelic_counts_tsv}'
                     + f' --segments {modeled_segments}'
                     + f' --sequence-dictionary {fa_dict}'
+                    + ''.join(
+                        f' {a}' for a in self.add_plotmodeledsegments_args
+                    )
                     + f' --output {plots_dir}'
                     + f' --output-prefix {run_id}'
                 ),
@@ -368,6 +408,7 @@ class ModelSegments(SagvcTask):
 class CallCopyRatioSegments(SagvcTask):
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
+    add_callcopyratiosegments_args = luigi.ListParameter(default=list())
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
@@ -395,7 +436,9 @@ class CallCopyRatioSegments(SagvcTask):
         self.run_shell(
             args=(
                 f'set -e && {self.gatk} CallCopyRatioSegments'
-                + f' --input {cr_seg} --output {output_seg}'
+                + f' --input {cr_seg}'
+                + ''.join(f' {a}' for a in self.add_callcopyratiosegments_args)
+                + f' --output {output_seg}'
             ),
             input_files_or_dirs=cr_seg, output_files_or_dirs=output_seg
         )

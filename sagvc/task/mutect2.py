@@ -18,6 +18,7 @@ class GetPileupSummaries(SagvcTask):
     interval_list_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
+    add_getpileupsummaries_args = luigi.ListParameter(default=list())
     save_memory = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
@@ -61,9 +62,16 @@ class GetPileupSummaries(SagvcTask):
                 + f' --reference {fa}'
                 + f' --variant {common_biallelic_vcf}'
                 + (f' --intervals {interval_list}' if interval_list else '')
+                + ''.join(
+                    f' {a}' for a in [
+                        *self.add_getpileupsummaries_args,
+                        *(
+                            ['--disable-bam-index-caching', 'true']
+                            if self.save_memory else list()
+                        )
+                    ]
+                )
                 + f' --output {output_pileup_table}'
-                + ' --disable-bam-index-caching '
-                + str(self.save_memory).lower()
             ),
             input_files_or_dirs=[
                 cram, fa, common_biallelic_vcf,
@@ -81,6 +89,8 @@ class CalculateContamination(SagvcTask):
     interval_list_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
+    add_getpileupsummaries_args = luigi.ListParameter(default=list())
+    add_calculatecontamination_args = luigi.ListParameter(default=list())
     save_memory = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
@@ -94,6 +104,7 @@ class CalculateContamination(SagvcTask):
                 interval_list_path=self.interval_list_path,
                 common_biallelic_vcf_path=self.common_biallelic_vcf_path,
                 dest_dir_path=self.dest_dir_path, gatk=self.gatk,
+                add_getpileupsummaries_args=self.add_getpileupsummaries_args,
                 save_memory=self.save_memory, n_cpu=self.n_cpu,
                 memory_mb=self.memory_mb, sh_config=self.sh_config
             ) for p in [self.tumor_cram_path, self.normal_cram_path]
@@ -128,8 +139,11 @@ class CalculateContamination(SagvcTask):
                 f'set -e && {self.gatk} CalculateContamination'
                 + f' --input {pileup_tables[0]}'
                 + f' --matched-normal {pileup_tables[1]}'
-                + f' --output {output_contamination_table}'
+                + ''.join(
+                    f' {a}' for a in self.add_calculatecontamination_args
+                )
                 + f' --tumor-segmentation {output_segment_table}'
+                + f' --output {output_contamination_table}'
             ),
             input_files_or_dirs=pileup_tables,
             output_files_or_dirs=[
@@ -149,6 +163,11 @@ class CallVariantsWithMutect2(SagvcTask):
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
     samtools = luigi.Parameter(default='samtools')
+    add_mutect2_args = luigi.ListParameter(
+        default=[
+            '--max-mnp-distance', '0', '--create-output-bam-index', 'false'
+        ]
+    )
     save_memory = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
@@ -189,6 +208,7 @@ class CallVariantsWithMutect2(SagvcTask):
                 tumor_sample_name=self.tumor_sample_name,
                 normal_sample_name=self.normal_sample_name,
                 output_path_prefix=s, gatk=self.gatk,
+                add_mutect2_args=self.add_mutect2_args,
                 save_memory=self.save_memory, n_cpu=self.n_cpu,
                 memory_mb=self.memory_mb, sh_config=self.sh_config
             ) for o, s in zip(interval_lists, tmp_prefixes)
@@ -272,6 +292,7 @@ class Mutect2(SagvcTask):
     output_path_prefix = luigi.Parameter()
     germline_resource_vcf_path = luigi.Parameter(default='')
     gatk = luigi.Parameter(default='gatk')
+    add_mutect2_args = luigi.ListParameter(default=list())
     save_memory = luigi.BoolParameter(default=False)
     message = luigi.Parameter(default='')
     n_cpu = luigi.IntParameter(default=1)
@@ -313,21 +334,26 @@ class Mutect2(SagvcTask):
                 f'set -e && {self.gatk} Mutect2'
                 + ''.join(f' --input {c}' for c in input_crams)
                 + f' --reference {fa}'
-                + f' --intervals {interval_list}'
                 + (
                     f' --germline-resource {germline_resource_vcf}'
                     if germline_resource_vcf else ''
                 )
-                + f' --output {output_vcf}'
-                + f' --bam-output {output_files[3]}'
-                + f' --f1r2-tar-gz {output_files[4]}'
+                + f' --intervals {interval_list}'
                 + f' --tumor-sample {self.tumor_sample_name}'
                 + f' --normal-sample {self.normal_sample_name}'
                 + f' --native-pair-hmm-threads {self.n_cpu}'
-                + ' --max-mnp-distance 0'
-                + ' --create-output-bam-index false'
-                + ' --disable-bam-index-caching '
-                + str(self.save_memory).lower()
+                + ''.join(
+                    f' {a}' for a in [
+                        *self.add_mutect2_args,
+                        *(
+                            ['--disable-bam-index-caching', 'true']
+                            if self.save_memory else list()
+                        )
+                    ]
+                )
+                + f' --output {output_vcf}'
+                + f' --bam-output {output_files[3]}'
+                + f' --f1r2-tar-gz {output_files[4]}'
             ),
             input_files_or_dirs=[
                 *input_crams, fa, interval_list,
@@ -341,6 +367,7 @@ class Mutect2(SagvcTask):
 class FilterMutectCalls(SagvcTask):
     fa_path = luigi.Parameter()
     gatk = luigi.Parameter(default='gatk')
+    add_filtermutectcalls_args = luigi.ListParameter(default=list())
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
@@ -383,13 +410,14 @@ class FilterMutectCalls(SagvcTask):
                 + f' --variant {input_vcf}'
                 + f' --stats {input_stats}'
                 + f' --contamination-table {contamination_table}'
-                + f' --tumor-segmentation {segment_table}'
                 + f' --orientation-bias-artifact-priors {ob_priors}'
+                + f' --tumor-segmentation {segment_table}'
+                + ''.join(f' {a}' for a in self.add_filtermutectcalls_args)
                 + f' --output {output_vcf}'
                 + f' --filtering-stats {output_stats}'
             ),
             input_files_or_dirs=[
-                input_vcf, fa, input_stats, ob_priors, contamination_table,
+                input_vcf, fa, input_stats, contamination_table, ob_priors,
                 segment_table,
             ],
             output_files_or_dirs=output_files
