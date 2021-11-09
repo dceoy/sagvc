@@ -157,12 +157,12 @@ class HaplotypeCaller(SagvcTask):
                 + f' --output {output_vcf}'
                 + f' --bam-output {output_files[2]}'
                 + ' --standard-min-confidence-threshold-for-calling 0'
-                + ''.join([
+                + ''.join(
                     f' --annotation {g}' for g in [
                         'Coverage', 'ChromosomeCounts', 'BaseQuality',
                         'FragmentLength', 'MappingQuality', 'ReadPosition'
                     ]
-                ])
+                )
                 + f' --native-pair-hmm-threads {self.n_cpu}'
                 + ' --create-output-bam-index false'
                 + ' --disable-bam-index-caching '

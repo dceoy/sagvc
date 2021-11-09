@@ -12,6 +12,7 @@ class CreateCnvAcccessBed(SagvcTask):
     excl_bed_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     cnvkitpy = luigi.Parameter(default='cnvkit.py')
+    add_access_args = luigi.ListParameter(default=list())
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
@@ -45,6 +46,7 @@ class CreateCnvAcccessBed(SagvcTask):
             args=(
                 f'set -e && {self.cnvkitpy} access'
                 + (f' --exclude={excl_bed}' if excl_bed else '')
+                + ''.join(f' {a}' for a in self.add_access_args)
                 + f' --output={output_bed} {fa}'
             ),
             input_files_or_dirs=[fa, *([excl_bed] if excl_bed else list())],
@@ -63,11 +65,15 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
     samtools = luigi.Parameter(default='samtools')
     rscript = luigi.Parameter(default='Rscript')
     seq_method = luigi.Parameter(default='wgs')
-    n_cpu = luigi.IntParameter(default=1)
-    drop_low_coverage = luigi.BoolParameter(default=True)
-    short_names = luigi.BoolParameter(default=True)
     diagram = luigi.BoolParameter(default=True)
     scatter = luigi.BoolParameter(default=True)
+    add_batch_args = luigi.ListParameter(
+        default=['--drop-low-coverage', ' --short-names']
+    )
+    add_export_seg_args = luigi.ListParameter(default=list())
+    add_diagram_args = luigi.ListParameter(default=list())
+    add_scatter_args = luigi.ListParameter(default=list())
+    n_cpu = luigi.IntParameter(default=1)
     sh_config = luigi.DictParameter(default=dict())
     priority = 20
 
@@ -135,11 +141,10 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
                 + f' --fasta={fa}'
                 + (f' --access={access_bed}' if access_bed else '')
                 + (f' --annotate={refflat_txt}' if refflat_txt else '')
-                + (' --drop-low-coverage' if self.drop_low_coverage else '')
-                + (' --short-names' if self.short_names else '')
-                + f' --processes={self.n_cpu}'
                 + f' --output-dir={run_dir}'
                 + f' --output-reference={output_ref_cnn}'
+                + f' --processes={self.n_cpu}'
+                + ''.join(f' {a}' for a in self.add_batch_args)
                 + f' --normal={normal_cram}'
                 + f' {tumor_cram}'
             ),
@@ -156,6 +161,7 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
             self.run_shell(
                 args=(
                     f'set -e && {self.cnvkitpy} export seg'
+                    + ''.join(f' {a}' for a in self.add_export_seg_args)
                     + f' --output={output_seg} {o}'
                 ),
                 input_files_or_dirs=o, output_files_or_dirs=output_seg
@@ -166,6 +172,9 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
                 self.run_shell(
                     args=(
                         f'set -e && {self.cnvkitpy} {c}'
+                        + ''.join(
+                            f' {a}' for a in getattr(self, f'add_{c}_args')
+                        )
                         + f' --output={graph_pdf} {output_cns}'
                     ),
                     input_files_or_dirs=output_cns,

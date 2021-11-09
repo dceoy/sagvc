@@ -477,7 +477,7 @@ class IntersectBed(SagvcTask):
             args=(
                 f'set -e && {self.bedtools} intersect'
                 + f' -a {input_beds[0]} -b'
-                + ''.join([f' {b}' for b in input_beds[1:]])
+                + ''.join(f' {b}' for b in input_beds[1:])
                 + f' > {output_bed}'
             ),
             input_files_or_dirs=input_beds, output_files_or_dirs=output_bed

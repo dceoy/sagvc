@@ -12,6 +12,7 @@ class ScanMicrosatellites(SagvcTask):
     fa_path = luigi.Parameter()
     dest_dir_path = luigi.Parameter(default='.')
     msisensor = luigi.Parameter(default='msisensor')
+    add_scan_args = luigi.ListParameter(default=list())
     sh_config = luigi.DictParameter(default=dict())
     priority = 60
 
@@ -32,7 +33,12 @@ class ScanMicrosatellites(SagvcTask):
             **self.sh_config
         )
         self.run_shell(
-            args=f'set -e && {self.msisensor} scan -d {fa} -o {output_tsv}',
+            args=(
+                f'set -e && {self.msisensor} scan'
+                + f' -d {fa}'
+                + ''.join(f' {a}' for a in self.add_scan_args)
+                + f' -o {output_tsv}'
+            ),
             input_files_or_dirs=fa, output_files_or_dirs=output_tsv
         )
 
@@ -46,6 +52,7 @@ class ScoreMsiWithMsisensor(SagvcTask):
     dest_dir_path = luigi.Parameter(default='.')
     msisensor = luigi.Parameter(default='msisensor')
     samtools = luigi.Parameter(default='samtools')
+    add_msi_args = luigi.ListParameter(default=list())
     n_cpu = luigi.IntParameter(default=1)
     sh_config = luigi.DictParameter(default=dict())
     priority = 20
@@ -103,10 +110,11 @@ class ScoreMsiWithMsisensor(SagvcTask):
         self.run_shell(
             args=(
                 f'set -e && {self.msisensor} msi'
-                + f' -t {bams[0]} -n {bams[1]}'
                 + f' -d {ms_tsv}'
                 + (' -e {bed}' if bed else '')
+                + ''.join(f' {a}' for a in self.add_msi_args)
                 + f' -o {output_files[0]}'
+                + f' -t {bams[0]} -n {bams[1]}'
             ),
             input_files_or_dirs=[*bams, ms_tsv, *([bed] if bed else list())],
             output_files_or_dirs=[*output_files, run_dir]

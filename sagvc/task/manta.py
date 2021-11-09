@@ -70,8 +70,8 @@ class CallSomaticStructualVariantsWithManta(SagvcTask):
                 + f' --tumorBam={tumor_cram}'
                 + f' --normalBam={normal_cram}'
                 + f' --referenceFasta={fa}'
-                + (f' --callRegions={bed}' if bed else '')
                 + f' --runDir={run_dir}'
+                + (f' --callRegions={bed}' if bed else '')
                 + (' --exome' if self.exome else '')
             ),
             input_files_or_dirs=[
@@ -152,8 +152,8 @@ class CallGermlineStructualVariantsWithManta(SagvcTask):
                 f'set -e && {self.python2} {config_script}'
                 + f' --bam={normal_cram}'
                 + f' --referenceFasta={fa}'
-                + (f' --callRegions={bed}' if bed else '')
                 + f' --runDir={run_dir}'
+                + (f' --callRegions={bed}' if bed else '')
                 + (' --exome' if self.exome else '')
             ),
             input_files_or_dirs=[

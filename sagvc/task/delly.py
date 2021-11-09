@@ -17,6 +17,8 @@ class CallSomaticStructualVariantsWithDelly(SagvcTask):
     dest_dir_path = luigi.Parameter(default='.')
     delly = luigi.Parameter(default='delly')
     bcftools = luigi.Parameter(default='bcftools')
+    add_call_args = luigi.ListParameter(default=list())
+    add_filter_args = luigi.ListParameter(default=list())
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
@@ -61,6 +63,7 @@ class CallSomaticStructualVariantsWithDelly(SagvcTask):
                 + f' --genome {fa}'
                 + (f' --exclude {excl_bed}' if excl_bed else '')
                 + f' --outfile {raw_bcf}'
+                + ''.join(f' {a}' for a in self.add_call_args)
                 + ''.join(f' {p}' for p in input_crams)
             ),
             input_files_or_dirs=[
@@ -83,6 +86,7 @@ class CallSomaticStructualVariantsWithDelly(SagvcTask):
                 f'set -e && {self.delly} filter --filter somatic'
                 + f' --samples {samples_tsv}'
                 + f' --outfile {filtered_bcf}'
+                + ''.join(f' {a}' for a in self.add_filter_args)
                 + f' {raw_bcf}'
             ),
             input_files_or_dirs=[raw_bcf, samples_tsv],
@@ -104,6 +108,7 @@ class CallGermlineStructualVariantsWithDelly(SagvcTask):
     dest_dir_path = luigi.Parameter(default='.')
     delly = luigi.Parameter(default='delly')
     bcftools = luigi.Parameter(default='bcftools')
+    add_call_args = luigi.ListParameter(default=list())
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
@@ -140,6 +145,7 @@ class CallGermlineStructualVariantsWithDelly(SagvcTask):
                 + f' --genome {fa}'
                 + (f' --exclude {excl_bed}' if excl_bed else '')
                 + f' --outfile {raw_bcf}'
+                + ''.join(f' {a}' for a in self.add_call_args)
                 + f' {input_cram}'
             ),
             input_files_or_dirs=[
