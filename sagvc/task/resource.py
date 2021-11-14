@@ -28,7 +28,7 @@ class CreateBiallelicSnpVcf(SagvcTask):
 
     def run(self):
         run_id = Path(self.input_vcf_path).stem
-        self.print_log(f'Create a common biallelic SNP VCF:\t{run_id}')
+        self.print_log(f'Create a biallelic SNP VCF:\t{run_id}')
         input_vcf = Path(self.input_vcf_path).resolve()
         fa = Path(self.fa_path).resolve()
         biallelic_snp_vcf = Path(self.output()[0].path)
@@ -425,9 +425,7 @@ class CreateBiallelicSnpIntervalList(SagvcTask):
     def run(self):
         output_interval_list = Path(self.output()[0].path)
         run_id = output_interval_list.stem
-        self.print_log(
-            f'Create a common biallelic SNP interval_list:\t{run_id}'
-        )
+        self.print_log(f'Create a biallelic SNP interval_list:\t{run_id}')
         snp_vcf = Path(self.input()[0].path)
         fa = Path(self.fa_path).resolve()
         self.setup_shell(

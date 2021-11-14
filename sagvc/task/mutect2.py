@@ -14,7 +14,7 @@ from .resource import SplitEvaluationIntervals
 class GetPileupSummaries(SagvcTask):
     cram_path = luigi.Parameter()
     fa_path = luigi.Parameter()
-    common_biallelic_vcf_path = luigi.Parameter()
+    biallelic_snp_vcf_path = luigi.Parameter()
     interval_list_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
@@ -39,9 +39,7 @@ class GetPileupSummaries(SagvcTask):
         self.print_log(f'Get pileup summary:\t{run_id}')
         output_pileup_table = Path(self.output().path)
         fa = Path(self.fa_path).resolve()
-        common_biallelic_vcf = Path(
-            self.common_biallelic_vcf_path
-        ).resolve()
+        biallelic_snp_vcf = Path(self.biallelic_snp_vcf_path).resolve()
         interval_list = (
             Path(self.interval_list_path).resolve()
             if self.interval_list_path else None
@@ -60,7 +58,7 @@ class GetPileupSummaries(SagvcTask):
                 f'set -e && {self.gatk} GetPileupSummaries'
                 + f' --input {cram}'
                 + f' --reference {fa}'
-                + f' --variant {common_biallelic_vcf}'
+                + f' --variant {biallelic_snp_vcf}'
                 + (f' --intervals {interval_list}' if interval_list else '')
                 + ''.join(
                     f' {a}' for a in [
@@ -74,7 +72,7 @@ class GetPileupSummaries(SagvcTask):
                 + f' --output {output_pileup_table}'
             ),
             input_files_or_dirs=[
-                cram, fa, common_biallelic_vcf,
+                cram, fa, biallelic_snp_vcf,
                 *([interval_list] if interval_list else list())
             ],
             output_files_or_dirs=output_pileup_table
@@ -85,7 +83,7 @@ class CalculateContamination(SagvcTask):
     tumor_cram_path = luigi.Parameter()
     normal_cram_path = luigi.Parameter()
     fa_path = luigi.Parameter()
-    common_biallelic_vcf_path = luigi.Parameter()
+    biallelic_snp_vcf_path = luigi.Parameter()
     interval_list_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
@@ -102,7 +100,7 @@ class CalculateContamination(SagvcTask):
             GetPileupSummaries(
                 cram_path=p, fa_path=self.fa_path,
                 interval_list_path=self.interval_list_path,
-                common_biallelic_vcf_path=self.common_biallelic_vcf_path,
+                biallelic_snp_vcf_path=self.biallelic_snp_vcf_path,
                 dest_dir_path=self.dest_dir_path, gatk=self.gatk,
                 add_getpileupsummaries_args=self.add_getpileupsummaries_args,
                 save_memory=self.save_memory, n_cpu=self.n_cpu,
@@ -124,7 +122,7 @@ class CalculateContamination(SagvcTask):
         run_dir = output_contamination_table.parent
         run_id = '.'.join(output_contamination_table.name.split('.')[:-2])
         self.print_log(f'Calculate cross-sample contamination:\t{run_id}')
-        pileup_tables = [Path(i.path) for i in input()]
+        pileup_tables = [Path(i.path) for i in self.input()]
         output_segment_table = Path(self.output()[1].path)
         self.setup_shell(
             run_id=run_id, commands=self.gatk, cwd=run_dir, **self.sh_config,
@@ -165,7 +163,7 @@ class CallVariantsWithMutect2(SagvcTask):
     samtools = luigi.Parameter(default='samtools')
     add_mutect2_args = luigi.ListParameter(
         default=[
-            '--max-mnp-distance', '0', '--create-output-bam-index', 'false'
+            '--max-mnp-distance', '1', '--create-output-bam-index', 'false'
         ]
     )
     save_memory = luigi.BoolParameter(default=False)

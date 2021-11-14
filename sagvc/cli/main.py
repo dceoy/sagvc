@@ -17,7 +17,7 @@ Usage:
         <fa_path> <normal_sam_path>
     sagvc mutect2 [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>]
-        [--interval-list=<path>] [--biallelic-snp-vcf==<path>]
+        [--interval-list=<path>] [--biallelic-snp-vcf=<path>]
         [--germline-resource-vcf=<path>] [--tumor-sample=<name>]
         [--normal-sample=<name>] <fa_path> <tumor_sam_path> <normal_sam_path>
     sagvc delly [--debug|--info] [--cpus=<int>] [--skip-cleaning]
@@ -91,11 +91,11 @@ Options:
                             Specify a path to a microsatellites TSV file
 
 Args:
-    <fa_path>               Path to an reference FASTA file
+    <fa_path>               Path to a reference FASTA file
                             (The index and sequence dictionary are required.)
-    <bed_path>              Path to a target region BED file
-    <tumor_sam_path>        Path to a tumor CRAM file
-    <normal_sam_path>       Path to a normal CRAM file
+    <bed_path>              Path to a sorted target BED file
+    <tumor_sam_path>        Path to a sorted tumor CRAM file
+    <normal_sam_path>       Path to a sorted normal CRAM file
 """
 
 import logging
@@ -137,7 +137,7 @@ def main():
     logger.debug(f'args:{os.linesep}{args}')
     print_log(f'Start the workflow of sagvc {__version__}')
     n_cpu = int(args['--cpus'] or cpu_count())
-    if args['--workers']:
+    if args['download'] or args['target']:
         n_worker = int(args['--workers'])
     elif args['haplotypecaller'] or args['mutect2']:
         n_worker = n_cpu
@@ -252,7 +252,7 @@ def main():
                     fa_path=args['<fa_path>'],
                     tumor_sample_name=args['--tumor-sample'],
                     normal_sample_name=args['--normal-sample'],
-                    common_biallelic_snp_vcf_path=args['--biallelic-snp-vcf'],
+                    biallelic_snp_vcf_path=args['--biallelic-snp-vcf'],
                     germline_resource_vcf_path=args['--germline-resource-vcf'],
                     interval_list_path=(args['--interval-list'] or ''),
                     dest_dir_path=args['--dest-dir'],
