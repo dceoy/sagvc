@@ -19,6 +19,7 @@ class CallVariantsWithHaplotypeCaller(SagvcTask):
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
     samtools = luigi.Parameter(default='samtools')
+    max_mnp_distance = luigi.IntParameter(default=1)
     add_haplotypecaller_args = luigi.ListParameter(
         default=[
             '--standard-min-confidence-threshold-for-calling', '0',
@@ -63,7 +64,7 @@ class CallVariantsWithHaplotypeCaller(SagvcTask):
                 input_cram_path=self.normal_cram_path, fa_path=str(fa),
                 dbsnp_vcf_path=self.dbsnp_vcf_path,
                 interval_list_path=str(o), output_path_prefix=s,
-                gatk=self.gatk,
+                gatk=self.gatk, max_mnp_distance=self.max_mnp_distance,
                 add_haplotypecaller_args=self.add_haplotypecaller_args,
                 save_memory=self.save_memory, n_cpu=self.n_cpu,
                 memory_mb=self.memory_mb, sh_config=self.sh_config
@@ -122,6 +123,7 @@ class HaplotypeCaller(SagvcTask):
     output_path_prefix = luigi.Parameter()
     dbsnp_vcf_path = luigi.Parameter(default='')
     gatk = luigi.Parameter(default='gatk')
+    max_mnp_distance = luigi.IntParameter(default=1)
     add_haplotypecaller_args = luigi.ListParameter(default=list())
     save_memory = luigi.BoolParameter(default=False)
     message = luigi.Parameter(default='')
@@ -167,6 +169,7 @@ class HaplotypeCaller(SagvcTask):
                 + (f' --dbsnp {dbsnp_vcf}' if dbsnp_vcf else '')
                 + f' --intervals {interval_list}'
                 + f' --native-pair-hmm-threads {self.n_cpu}'
+                + f' --max-mnp-distance {self.max_mnp_distance}'
                 + ''.join(
                     f' {a}' for a in [
                         *self.add_haplotypecaller_args,

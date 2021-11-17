@@ -161,10 +161,9 @@ class CallVariantsWithMutect2(SagvcTask):
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
     samtools = luigi.Parameter(default='samtools')
+    max_mnp_distance = luigi.IntParameter(default=1)
     add_mutect2_args = luigi.ListParameter(
-        default=[
-            '--max-mnp-distance', '1', '--create-output-bam-index', 'false'
-        ]
+        default=['--create-output-bam-index', 'false']
     )
     save_memory = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
@@ -206,6 +205,7 @@ class CallVariantsWithMutect2(SagvcTask):
                 tumor_sample_name=self.tumor_sample_name,
                 normal_sample_name=self.normal_sample_name,
                 output_path_prefix=s, gatk=self.gatk,
+                max_mnp_distance=self.max_mnp_distance,
                 add_mutect2_args=self.add_mutect2_args,
                 save_memory=self.save_memory, n_cpu=self.n_cpu,
                 memory_mb=self.memory_mb, sh_config=self.sh_config
@@ -290,6 +290,7 @@ class Mutect2(SagvcTask):
     output_path_prefix = luigi.Parameter()
     germline_resource_vcf_path = luigi.Parameter(default='')
     gatk = luigi.Parameter(default='gatk')
+    max_mnp_distance = luigi.IntParameter(default=1)
     add_mutect2_args = luigi.ListParameter(default=list())
     save_memory = luigi.BoolParameter(default=False)
     message = luigi.Parameter(default='')
@@ -340,6 +341,7 @@ class Mutect2(SagvcTask):
                 + f' --tumor-sample {self.tumor_sample_name}'
                 + f' --normal-sample {self.normal_sample_name}'
                 + f' --native-pair-hmm-threads {self.n_cpu}'
+                + f' --max-mnp-distance {self.max_mnp_distance}'
                 + ''.join(
                     f' {a}' for a in [
                         *self.add_mutect2_args,

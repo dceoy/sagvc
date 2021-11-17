@@ -12,11 +12,11 @@ Usage:
     sagvc write-af-only-vcf [--debug|--info] [--cpus=<int>]
         [--src-path=<path>|--src-url=<url>] [--dest-dir=<path>]
     sagvc haplotypecaller [--debug|--info] [--cpus=<int>] [--skip-cleaning]
-        [--print-subprocesses] [--dest-dir=<path>]
+        [--print-subprocesses] [--dest-dir=<path>] [--max-mnp-distance=<int>]
         [--interval-list=<path>] [--dbsnp-vcf=<path>] (--resource-vcf=<path>)
         <fa_path> <normal_sam_path>
     sagvc mutect2 [--debug|--info] [--cpus=<int>] [--skip-cleaning]
-        [--print-subprocesses] [--dest-dir=<path>]
+        [--print-subprocesses] [--dest-dir=<path>] [--max-mnp-distance=<int>]
         [--interval-list=<path>] [--biallelic-snp-vcf=<path>]
         [--germline-resource-vcf=<path>] [--tumor-sample=<name>]
         [--normal-sample=<name>] <fa_path> <tumor_sam_path> <normal_sam_path>
@@ -68,6 +68,8 @@ Options:
     --cnv-blacklist=<path>  Specify a path to a CNV blacklist file for GATK
     --src-path=<path>       Specify a source file path
     --src-url=<url>         Specify a source URL
+    --max-mnp-distance=<int>
+                            Specify the max MNP distance [default: 1]
     --interval-list=<path>  Specify a path to an interval_list file
     --dbsnp-vcf=<path>      Specify a path to a dbSNP VCF file
     --resource-vcf=<path>   Specify a path to a known SNP and INDEL VCF file
@@ -234,6 +236,7 @@ def main():
                     dest_dir_path=args['--dest-dir'],
                     gatk=fetch_executable('gatk'),
                     samtools=fetch_executable('samtools'),
+                    max_mnp_distance=int(args['--max-mnp-distance']),
                     save_memory=(memory_mb_per_worker < 8192),
                     n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
                     sh_config=sh_config, scatter_count=n_worker
@@ -258,6 +261,7 @@ def main():
                     dest_dir_path=args['--dest-dir'],
                     gatk=fetch_executable('gatk'),
                     samtools=fetch_executable('samtools'),
+                    max_mnp_distance=int(args['--max-mnp-distance']),
                     save_memory=(memory_mb_per_worker < 8192),
                     n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
                     sh_config=sh_config, scatter_count=n_worker
