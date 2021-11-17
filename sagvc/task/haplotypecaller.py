@@ -345,7 +345,7 @@ class FilterVariantTranches(SagvcTask):
     priority = 50
 
     def output(self):
-        output_path_prefix = re.sub(r'\.vcf\.gz$', '', self.input()[0][0].path)
+        output_path_prefix = re.sub(r'\.vcf\.gz$', '', self.input()[0].path)
         return [
             luigi.LocalTarget(f'{output_path_prefix}.filtered.vcf.gz{s}')
             for s in ['', '.tbi']

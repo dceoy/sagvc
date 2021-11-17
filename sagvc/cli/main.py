@@ -13,16 +13,16 @@ Usage:
         [--src-path=<path>|--src-url=<url>] [--dest-dir=<path>]
     sagvc haplotypecaller [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--max-mnp-distance=<int>]
-        [--interval-list=<path>] [--dbsnp-vcf=<path>] (--resource-vcf=<path>)
-        <fa_path> <normal_sam_path>
+        [--interval-list=<path>] [--dbsnp-vcf=<path>]
+        (--resource-vcf=<path>)... <fa_path> <normal_sam_path>
     sagvc mutect2 [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--max-mnp-distance=<int>]
-        [--interval-list=<path>] [--biallelic-snp-vcf=<path>]
-        [--germline-resource-vcf=<path>] [--tumor-sample=<name>]
-        [--normal-sample=<name>] <fa_path> <tumor_sam_path> <normal_sam_path>
+        [--interval-list=<path>] (--biallelic-snp-vcf=<path>)
+        (--germline-resource-vcf=<path>) (--tumor-sample=<name>)
+        (--normal-sample=<name>) <fa_path> <tumor_sam_path> <normal_sam_path>
     sagvc delly [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--excl-bed=<path>]
-        [--tumor-sample=<name>] [--normal-sample=<name>] <fa_path>
+        (--tumor-sample=<name>) (--normal-sample=<name>) <fa_path>
         <tumor_sam_path> <normal_sam_path>
     sagvc manta [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--exome] [--bed=<path>]
@@ -33,8 +33,8 @@ Usage:
         <normal_sam_path>
     sagvc callcopyratiosegments [--debug|--info] [--cpus=<int>]
         [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
-        [--snp-interval-list=<path>] [--preproc-interval-list=<path>]
-        <fa_path> <tumor_sam_path> <normal_sam_path>
+        [--preproc-interval-list=<path>] (--snp-interval-list=<path>) <fa_path>
+        <tumor_sam_path> <normal_sam_path>
     sagvc msisensor [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--use-msisensor-pro]
         [--bed=<path>] [--microsatellites-tsv=<path>] <fa_path>
@@ -85,10 +85,10 @@ Options:
     --seq-method=<type>     Specify a sequencing assay type [default: wgs]
     --access-bed=<path>     Specify a path to a CNV accessible region BED file
     --refflat-txt=<path>    Specify a path to a refFlat text file
-    --snp-interval-list=<path>
-                            Specify a path to a common sites VCF file
     --preproc-interval-list=<path>
                             Specify a path to a preprocessed interval_list file
+    --snp-interval-list=<path>
+                            Specify a path to a common sites VCF file
     --microsatellites-tsv=<path>
                             Specify a path to a microsatellites TSV file
 
@@ -224,7 +224,6 @@ def main():
             log_level=log_level
         )
     elif args['haplotypecaller']:
-        assert bool(args['--resource-vcf']), '--resource-vcf required'
         build_luigi_tasks(
             tasks=[
                 FilterVariantTranches(
@@ -245,8 +244,6 @@ def main():
             workers=n_worker, log_level=log_level
         )
     elif args['mutect2']:
-        for k in ['--biallelic-snp-vcf', '--germline-resource-vcf']:
-            assert bool(args[k]), f'{k} required'
         build_luigi_tasks(
             tasks=[
                 FilterMutectCalls(
@@ -324,8 +321,6 @@ def main():
             workers=n_worker, log_level=log_level
         )
     elif args['callcopyratiosegments']:
-        for k in ['--snp-interval-list', '--preproc-interval-list']:
-            assert bool(args[k]), f'{k} required'
         build_luigi_tasks(
             tasks=[
                 CallCopyRatioSegmentsTumor(
