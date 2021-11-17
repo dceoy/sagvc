@@ -78,14 +78,12 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
     priority = 20
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            self.create_matched_id(self.tumor_cram_path, self.normal_cram_path)
-        )
+        dest_dir = Path(self.dest_dir_path).resolve()
         tumor_stem = Path(self.tumor_cram_path).stem
         normal_stem = Path(self.normal_cram_path).stem
         access_stem = Path(self.access_bed_path or self.fa_path).stem
         return [
-            luigi.LocalTarget(run_dir.joinpath(n)) for n in (
+            luigi.LocalTarget(dest_dir.joinpath(n)) for n in (
                 [
                     (tumor_stem + s) for s in (
                         [

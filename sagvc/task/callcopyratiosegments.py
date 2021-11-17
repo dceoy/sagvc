@@ -102,11 +102,10 @@ class CollectAllelicCounts(SagvcTask):
     priority = 30
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            Path(self.cram_path).stem
-        )
         return luigi.LocalTarget(
-            run_dir.joinpath(f'{run_dir.name}.allelic_counts.tsv')
+            Path(self.dest_dir_path).resolve().joinpath(
+                Path(self.cram_path).stem + '.allelic_counts.tsv'
+            )
         )
 
     def run(self):
@@ -163,11 +162,10 @@ class CollectReadCounts(SagvcTask):
     priority = 30
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            Path(self.cram_path).stem
-        )
         return luigi.LocalTarget(
-            run_dir.joinpath(f'{run_dir.name}.counts.hdf5')
+            Path(self.dest_dir_path).resolve().joinpath(
+                Path(self.cram_path).stem + '.counts.hdf5'
+            )
         )
 
     def run(self):
@@ -297,19 +295,16 @@ class ModelSegments(SagvcTask):
     priority = 30
 
     def output(self):
-        output_path_prefix = str(
-            Path(self.dest_dir_path).joinpath(
-                Path(
-                    self.create_matched_id(
-                        self.case_allelic_counts_tsv_path,
-                        self.normal_allelic_counts_tsv_path
-                    ) if self.case_allelic_counts_tsv_path else
-                    Path(self.normal_allelic_counts_tsv_path).stem
-                ).stem
-            )
-        )
+        dest_dir = Path(self.dest_dir_path).resolve()
+        output_stem = Path(
+            self.create_matched_id(
+                self.case_allelic_counts_tsv_path,
+                self.normal_allelic_counts_tsv_path
+            ) if self.case_allelic_counts_tsv_path else
+            Path(self.normal_allelic_counts_tsv_path).stem
+        ).stem
         return [
-            luigi.LocalTarget(f'{output_path_prefix}.{s}')
+            luigi.LocalTarget(dest_dir.joinpath(f'{output_stem}.{s}'))
             for s in ['cr.seg', 'hets.tsv', 'modelFinal.seg']
         ]
 
@@ -486,12 +481,11 @@ class CallCopyRatioSegmentsTumor(luigi.Task):
         ]
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            self.create_matched_id(self.tumor_cram_path, self.normal_cram_path)
+        dest_dir = Path(self.dest_dir_path).resolve()
+        tn_stem = self.create_matched_id(
+            self.tumor_cram_path, self.normal_cram_path
         )
-        return luigi.LocalTarget(
-            run_dir.joinpath(f'{run_dir.name}.cr.called.seg')
-        )
+        return luigi.LocalTarget(dest_dir.joinpath(f'{tn_stem}.cr.called.seg'))
 
     def run(self):
         input_file_paths = [p for p in self.input()]
@@ -552,11 +546,10 @@ class CallCopyRatioSegmentsNormal(luigi.Task):
         ]
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            Path(self.normal_cram_path).stem
-        )
+        dest_dir = Path(self.dest_dir_path).resolve()
+        cram_stem = Path(self.normal_cram_path).stem
         return luigi.LocalTarget(
-            run_dir.joinpath(f'{run_dir.name}.cr.called.seg')
+            dest_dir.joinpath(f'{cram_stem}.cr.called.seg')
         )
 
     def run(self):

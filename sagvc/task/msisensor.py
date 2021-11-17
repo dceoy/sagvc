@@ -72,12 +72,13 @@ class ScoreMsiWithMsisensor(SagvcTask):
             )
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            self.create_matched_id(self.tumor_cram_path, self.normal_cram_path)
+        dest_dir = Path(self.dest_dir_path).resolve()
+        tn_stem = self.create_matched_id(
+            self.tumor_cram_path, self.normal_cram_path
         )
         return [
             luigi.LocalTarget(
-                run_dir.joinpath(f'{run_dir.name}.msisensor.tsv{s}')
+                dest_dir.joinpath(f'{tn_stem}.msisensor.tsv{s}')
             ) for s in ['', '_dis', '_germline', '_somatic']
         ]
 

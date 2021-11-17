@@ -25,12 +25,13 @@ class CallSomaticStructualVariantsWithManta(SagvcTask):
     priority = 30
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            self.create_matched_id(self.tumor_cram_path, self.normal_cram_path)
+        dest_dir = Path(self.dest_dir_path).resolve()
+        tn_stem = self.create_matched_id(
+            self.tumor_cram_path, self.normal_cram_path
         )
         return [
             luigi.LocalTarget(
-                run_dir.joinpath(f'{run_dir.name}.manta.{v}SV.vcf.gz{s}')
+                dest_dir.joinpath(f'{tn_stem}.manta.{v}SV.vcf.gz{s}')
             ) for v, s in product(['somatic', 'diploid'], ['', '.tbi'])
         ]
 
@@ -112,12 +113,11 @@ class CallGermlineStructualVariantsWithManta(SagvcTask):
     priority = 30
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            Path(self.normal_cram_path).stem
-        )
+        dest_dir = Path(self.dest_dir_path).resolve()
+        cram_stem = Path(self.normal_cram_path).stem
         return [
             luigi.LocalTarget(
-                run_dir.joinpath(f'{run_dir.name}.manta.diploidSV.vcf.gz{s}')
+                dest_dir.joinpath(f'{cram_stem}.manta.diploidSV.vcf.gz{s}')
             ) for s in ['', '.tbi']
         ]
 

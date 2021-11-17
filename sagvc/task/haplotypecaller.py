@@ -36,13 +36,11 @@ class CallVariantsWithHaplotypeCaller(SagvcTask):
     priority = 50
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            Path(self.normal_cram_path).stem
-        )
+        dest_dir = Path(self.dest_dir_path).resolve()
         cram_stem = Path(self.normal_cram_path).stem
         return [
             luigi.LocalTarget(
-                run_dir.joinpath(f'{cram_stem}.haplotypecaller.{s}')
+                dest_dir.joinpath(f'{cram_stem}.haplotypecaller.{s}')
             ) for s in ['vcf.gz', 'vcf.gz.tbi', 'cram', 'cram.crai']
         ]
 

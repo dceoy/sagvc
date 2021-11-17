@@ -25,13 +25,13 @@ class CallSomaticStructualVariantsWithDelly(SagvcTask):
     priority = 30
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            self.create_matched_id(self.tumor_cram_path, self.normal_cram_path)
+        dest_dir = Path(self.dest_dir_path).resolve()
+        tn_stem = self.create_matched_id(
+            self.tumor_cram_path, self.normal_cram_path
         )
         return [
-            luigi.LocalTarget(
-                run_dir.joinpath(run_dir.name + f'.delly.{s}')
-            ) for s in [
+            luigi.LocalTarget(dest_dir.joinpath(f'{tn_stem}.delly.{s}'))
+            for s in [
                 'filtered.vcf.gz', 'filtered.vcf.gz.tbi', 'filtered.bcf',
                 'filtered.bcf.csi', 'bcf', 'bcf.csi'
             ]
@@ -115,13 +115,11 @@ class CallGermlineStructualVariantsWithDelly(SagvcTask):
     priority = 30
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            Path(self.normal_cram_path).stem
-        )
+        dest_dir = Path(self.dest_dir_path).resolve()
+        cram_stem = Path(self.normal_cram_path).stem
         return [
-            luigi.LocalTarget(
-                run_dir.joinpath(run_dir.name + f'.delly.{s}')
-            ) for s in ['vcf.gz', 'vcf.gz.tbi', 'bcf', 'bcf.csi']
+            luigi.LocalTarget(dest_dir.joinpath(f'{cram_stem}.delly.{s}'))
+            for s in ['vcf.gz', 'vcf.gz.tbi', 'bcf', 'bcf.csi']
         ]
 
     def run(self):

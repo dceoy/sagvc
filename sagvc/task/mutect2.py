@@ -26,11 +26,10 @@ class GetPileupSummaries(SagvcTask):
     priority = 50
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            Path(self.cram_path).stem
-        )
         return luigi.LocalTarget(
-            run_dir.joinpath(f'{run_dir.name}.pileup.table')
+            Path(self.dest_dir_path).resolve().joinpath(
+                Path(self.cram_path).stem + '.pileup.table'
+            )
         )
 
     def run(self):
@@ -109,23 +108,24 @@ class CalculateContamination(SagvcTask):
         ]
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            self.create_matched_id(self.tumor_cram_path, self.normal_cram_path)
+        dest_dir = Path(self.dest_dir_path).resolve()
+        tn_stem = self.create_matched_id(
+            self.tumor_cram_path, self.normal_cram_path
         )
         return [
-            luigi.LocalTarget(run_dir.joinpath(f'{run_dir.name}.{s}.table'))
+            luigi.LocalTarget(dest_dir.joinpath(f'{tn_stem}.{s}.table'))
             for s in ['contamination', 'segment']
         ]
 
     def run(self):
         output_contamination_table = Path(self.output()[0].path)
-        run_dir = output_contamination_table.parent
         run_id = '.'.join(output_contamination_table.name.split('.')[:-2])
         self.print_log(f'Calculate cross-sample contamination:\t{run_id}')
         pileup_tables = [Path(i.path) for i in self.input()]
         output_segment_table = Path(self.output()[1].path)
         self.setup_shell(
-            run_id=run_id, commands=self.gatk, cwd=run_dir, **self.sh_config,
+            run_id=run_id, commands=self.gatk,
+            cwd=output_contamination_table.parent, **self.sh_config,
             env={
                 'JAVA_TOOL_OPTIONS': self.generate_gatk_java_options(
                     n_cpu=self.n_cpu, memory_mb=self.memory_mb
@@ -172,11 +172,12 @@ class CallVariantsWithMutect2(SagvcTask):
     priority = 50
 
     def output(self):
-        run_dir = Path(self.dest_dir_path).resolve().joinpath(
-            self.create_matched_id(self.tumor_cram_path, self.normal_cram_path)
+        dest_dir = Path(self.dest_dir_path).resolve()
+        tn_stem = self.create_matched_id(
+            self.tumor_cram_path, self.normal_cram_path
         )
         return [
-            luigi.LocalTarget(run_dir.joinpath(f'{run_dir.name}.mutect2.{s}'))
+            luigi.LocalTarget(dest_dir.joinpath(f'{tn_stem}.mutect2.{s}'))
             for s in [
                 'vcf.gz', 'vcf.gz.tbi', 'vcf.gz.stats', 'cram', 'cram.crai',
                 'read-orientation-model.tar.gz'
