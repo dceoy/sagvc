@@ -5,40 +5,44 @@ Somatic and Germline Variant Calling Pipeline
 Usage:
     sagvc download [--debug|--info] [--cpus=<int>] [--workers=<int>]
         [--skip-cleaning] [--print-subprocesses] [--use-gnomad-v3]
-        [--use-msisensor-pro] [--dest-dir=<path>]
+        [--use-msisensor-pro] [--dest-dir=<path>] [--log-dir=<path>]
     sagvc target [--debug|--info] [--cpus=<int>] [--workers=<int>]
         [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
-        [--cnv-blacklist=<path>] <fa_path> <bed_path>
+        [--log-dir=<path>] [--cnv-blacklist=<path>] <fa_path> <bed_path>
     sagvc write-af-only-vcf [--debug|--info] [--cpus=<int>]
         [--src-path=<path>|--src-url=<url>] [--dest-dir=<path>]
+        [--log-dir=<path>]
     sagvc haplotypecaller [--debug|--info] [--cpus=<int>] [--skip-cleaning]
-        [--print-subprocesses] [--dest-dir=<path>] [--max-mnp-distance=<int>]
-        [--interval-list=<path>] [--dbsnp-vcf=<path>]
-        (--resource-vcf=<path>)... <fa_path> <normal_sam_path>
+        [--print-subprocesses] [--dest-dir=<path>] [--log-dir=<path>]
+        [--max-mnp-distance=<int>] [--interval-list=<path>]
+        [--dbsnp-vcf=<path>] (--resource-vcf=<path>)... <fa_path>
+        <normal_sam_path>
     sagvc mutect2 [--debug|--info] [--cpus=<int>] [--skip-cleaning]
-        [--print-subprocesses] [--dest-dir=<path>] [--max-mnp-distance=<int>]
-        [--interval-list=<path>] (--biallelic-snp-vcf=<path>)
-        (--germline-resource-vcf=<path>) (--tumor-sample=<name>)
-        (--normal-sample=<name>) <fa_path> <tumor_sam_path> <normal_sam_path>
-    sagvc delly [--debug|--info] [--cpus=<int>] [--skip-cleaning]
-        [--print-subprocesses] [--dest-dir=<path>] [--excl-bed=<path>]
+        [--print-subprocesses] [--dest-dir=<path>] [--log-dir=<path>]
+        [--max-mnp-distance=<int>] [--interval-list=<path>]
+        (--biallelic-snp-vcf=<path>) (--germline-resource-vcf=<path>)
         (--tumor-sample=<name>) (--normal-sample=<name>) <fa_path>
         <tumor_sam_path> <normal_sam_path>
-    sagvc manta [--debug|--info] [--cpus=<int>] [--skip-cleaning]
-        [--print-subprocesses] [--dest-dir=<path>] [--exome] [--bed=<path>]
+    sagvc delly [--debug|--info] [--cpus=<int>] [--skip-cleaning]
+        [--print-subprocesses] [--dest-dir=<path>] [--log-dir=<path>]
+        [--excl-bed=<path>] (--tumor-sample=<name>) (--normal-sample=<name>)
         <fa_path> <tumor_sam_path> <normal_sam_path>
+    sagvc manta [--debug|--info] [--cpus=<int>] [--skip-cleaning]
+        [--print-subprocesses] [--dest-dir=<path>] [--log-dir=<path>] [--exome]
+        [--bed=<path>] <fa_path> <tumor_sam_path> <normal_sam_path>
     sagvc cnvkit [--debug|--info] [--cpus=<int>] [--skip-cleaning]
-        [--print-subprocesses] [--dest-dir=<path>] [--seq-method=<type>]
-        [--access-bed=<path>] [--refflat-txt=<path>] <fa_path> <tumor_sam_path>
-        <normal_sam_path>
+        [--print-subprocesses] [--dest-dir=<path>] [--log-dir=<path>]
+        [--seq-method=<type>] [--access-bed=<path>] [--refflat-txt=<path>]
+        <fa_path> <tumor_sam_path> <normal_sam_path>
     sagvc callcopyratiosegments [--debug|--info] [--cpus=<int>]
         [--skip-cleaning] [--print-subprocesses] [--dest-dir=<path>]
-        [--preproc-interval-list=<path>] (--snp-interval-list=<path>) <fa_path>
-        <tumor_sam_path> <normal_sam_path>
+        [--log-dir=<path>] [--preproc-interval-list=<path>]
+        (--snp-interval-list=<path>) <fa_path> <tumor_sam_path>
+        <normal_sam_path>
     sagvc msisensor [--debug|--info] [--cpus=<int>] [--skip-cleaning]
-        [--print-subprocesses] [--dest-dir=<path>] [--use-msisensor-pro]
-        [--bed=<path>] [--microsatellites-tsv=<path>] <fa_path>
-        <tumor_sam_path> <normal_sam_path>
+        [--print-subprocesses] [--dest-dir=<path>] [--log-dir=<path>]
+        [--use-msisensor-pro] [--bed=<path>] [--microsatellites-tsv=<path>]
+        <fa_path> <tumor_sam_path> <normal_sam_path>
     sagvc -h|--help
     sagvc --version
 
@@ -65,6 +69,7 @@ Options:
     --use-gnomad-v3         Use gnomAD v3 instead of v2
     --use-msisensor-pro     Use MSIsensor-pro instead of MSIsensor
     --dest-dir=<path>       Specify a destination directory path [default: .]
+    --log-dir=<path>        Specify an output log directory path
     --cnv-blacklist=<path>  Specify a path to a CNV blacklist file for GATK
     --src-path=<path>       Specify a source file path
     --src-url=<url>         Specify a source URL
@@ -156,7 +161,7 @@ def main():
         {'memory_mb_per_worker': memory_mb_per_worker}
     ])
     sh_config = {
-        'log_dir_path': args['--dest-dir'],
+        'log_dir_path': (args['--log-dir'] or args['--dest-dir']),
         'remove_if_failed': (not args['--skip-cleaning']),
         'quiet': (not args['--print-subprocesses']),
         'executable': fetch_executable('bash')
