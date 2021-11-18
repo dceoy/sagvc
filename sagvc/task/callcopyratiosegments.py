@@ -450,6 +450,7 @@ class CallCopyRatioSegmentsTumor(luigi.Task):
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
     r = luigi.Parameter(default='R')
+    save_memory = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
@@ -482,7 +483,7 @@ class CallCopyRatioSegmentsTumor(luigi.Task):
 
     def output(self):
         dest_dir = Path(self.dest_dir_path).resolve()
-        tn_stem = self.create_matched_id(
+        tn_stem = self.input()[0].create_matched_id(
             self.tumor_cram_path, self.normal_cram_path
         )
         return luigi.LocalTarget(dest_dir.joinpath(f'{tn_stem}.cr.called.seg'))
@@ -517,6 +518,7 @@ class CallCopyRatioSegmentsNormal(luigi.Task):
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
     r = luigi.Parameter(default='R')
+    save_memory = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())

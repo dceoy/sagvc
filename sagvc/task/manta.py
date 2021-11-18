@@ -47,7 +47,7 @@ class CallSomaticStructualVariantsWithManta(SagvcTask):
         config_script = Path(self.configmantapy_path).resolve()
         run_script = run_dir.joinpath('runWorkflow.py')
         pythonpath = '{0}:{1}'.format(
-            Path(self.config_script).parent.parent.joinpath('lib/python'),
+            config_script.parent.parent.joinpath('lib/python'),
             (os.getenv('PYTHONPATH') or '')
         )
         memory_gb = max(floor(self.memory_mb / 1024), 4)
@@ -132,7 +132,7 @@ class CallGermlineStructualVariantsWithManta(SagvcTask):
         config_script = Path(self.configmantapy_path).resolve()
         run_script = run_dir.joinpath('runWorkflow.py')
         pythonpath = '{0}:{1}'.format(
-            Path(self.config_script).parent.parent.joinpath('lib/python'),
+            config_script.parent.parent.joinpath('lib/python'),
             (os.getenv('PYTHONPATH') or '')
         )
         memory_gb = max(floor(self.memory_mb / 1024), 4)

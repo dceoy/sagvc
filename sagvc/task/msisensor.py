@@ -102,7 +102,7 @@ class ScoreMsiWithMsisensor(SagvcTask):
         self.print_log(f'Score MSI with MSIsensor:\t{run_id}')
         ms_tsv = Path(
             self.microsatellites_tsv_path or self.input().path
-        ).resource()
+        ).resolve()
         bed = (Path(self.bed_path).resolve() if self.bed_path else None)
         self.setup_shell(
             run_id=run_id, commands=self.msisensor, cwd=run_dir,
