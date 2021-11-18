@@ -218,13 +218,13 @@ class CallVariantsWithMutect2(SagvcTask):
         output_cram = Path(self.output()[3].path)
         ob_priors = Path(self.output()[5].path)
         f1r2s = [f'{s}.f1r2.tar.gz' for s in tmp_prefixes]
+        n_cpu = self.n_cpu * max(1, (len(input_targets) - 2))
         self.setup_shell(
             run_id=run_id, commands=[self.gatk, self.samtools],
-            cwd=output_vcf.parent,
-            **self.sh_config,
+            cwd=output_vcf.parent, **self.sh_config,
             env={
                 'JAVA_TOOL_OPTIONS': self.generate_gatk_java_options(
-                    n_cpu=self.n_cpu, memory_mb=self.memory_mb
+                    n_cpu=n_cpu, memory_mb=self.memory_mb
                 )
             }
         )
@@ -241,7 +241,7 @@ class CallVariantsWithMutect2(SagvcTask):
             self.samtools_view(
                 input_sam_path=tmp_bam, fa_path=fa,
                 output_sam_path=output_cram, samtools=self.samtools,
-                n_cpu=self.n_cpu, index_sam=True, remove_input=True
+                n_cpu=n_cpu, index_sam=True, remove_input=True
             )
         else:
             tmp_vcfs = [Path(f'{s}.vcf.gz') for s in tmp_prefixes]
@@ -272,8 +272,8 @@ class CallVariantsWithMutect2(SagvcTask):
             self.samtools_merge(
                 input_sam_paths=[f'{s}.bam' for s in tmp_prefixes],
                 fa_path=fa, output_sam_path=output_cram,
-                samtools=self.samtools, n_cpu=self.n_cpu,
-                memory_mb=self.memory_mb, index_sam=True, remove_input=False
+                samtools=self.samtools, n_cpu=n_cpu, memory_mb=self.memory_mb,
+                index_sam=True, remove_input=False
             )
             self.remove_files_and_dirs(
                 *chain.from_iterable(

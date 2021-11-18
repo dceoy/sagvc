@@ -73,12 +73,13 @@ class CallVariantsWithHaplotypeCaller(SagvcTask):
             f'Call germline variants with HaplotypeCaller:\t{run_id}'
         )
         output_cram = Path(self.output()[2].path)
+        n_cpu = self.n_cpu * len(input_targets)
         self.setup_shell(
             run_id=run_id, commands=self.gatk, cwd=output_vcf.parent,
             **self.sh_config,
             env={
                 'JAVA_TOOL_OPTIONS': self.generate_gatk_java_options(
-                    n_cpu=self.n_cpu, memory_mb=self.memory_mb
+                    n_cpu=n_cpu, memory_mb=self.memory_mb
                 )
             }
         )
@@ -87,7 +88,7 @@ class CallVariantsWithHaplotypeCaller(SagvcTask):
             self.samtools_view(
                 input_sam_path=tmp_bam, fa_path=fa,
                 output_sam_path=output_cram, samtools=self.samtools,
-                n_cpu=self.n_cpu, index_sam=True, remove_input=True
+                n_cpu=n_cpu, index_sam=True, remove_input=True
             )
         else:
             tmp_vcfs = [Path(f'{s}.vcf.gz') for s in tmp_prefixes]
@@ -104,8 +105,8 @@ class CallVariantsWithHaplotypeCaller(SagvcTask):
             self.samtools_merge(
                 input_sam_paths=[f'{s}.bam' for s in tmp_prefixes],
                 fa_path=fa, output_sam_path=output_cram,
-                samtools=self.samtools, n_cpu=self.n_cpu,
-                memory_mb=self.memory_mb, index_sam=True, remove_input=False
+                samtools=self.samtools, n_cpu=n_cpu, memory_mb=self.memory_mb,
+                index_sam=True, remove_input=False
             )
             self.remove_files_and_dirs(
                 *chain.from_iterable(
@@ -239,7 +240,8 @@ class ScoreVariantsWithCnn(SagvcTask):
             **self.sh_config,
             env={
                 'JAVA_TOOL_OPTIONS': self.generate_gatk_java_options(
-                    n_cpu=self.n_cpu, memory_mb=self.memory_mb
+                    n_cpu=(self.n_cpu * len(input_targets)),
+                    memory_mb=self.memory_mb
                 )
             }
         )
