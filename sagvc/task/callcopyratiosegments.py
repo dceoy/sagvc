@@ -149,9 +149,15 @@ class CollectAllelicCounts(SagvcTask):
 class CollectReadCounts(SagvcTask):
     cram_path = luigi.Parameter()
     fa_path = luigi.Parameter()
-    preproc_interval_list_path = luigi.Parameter()
+    preproc_interval_list_path = luigi.Parameter(default='')
+    cnv_blacklist_path = luigi.Parameter(default='')
+    interval_list_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
+    exome = luigi.BoolParameter(default=False)
+    add_preprocessintervals_args = luigi.ListParameter(
+        default=['--interval-merging-rule', 'OVERLAPPING_ONLY']
+    )
     add_collectreadcounts_args = luigi.ListParameter(
         default=['--interval-merging-rule', 'OVERLAPPING_ONLY']
     )
@@ -160,6 +166,21 @@ class CollectReadCounts(SagvcTask):
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
     priority = 30
+
+    def requires(self):
+        if self.preproc_interval_list_path:
+            return super().requires()
+        else:
+            return PreprocessIntervals(
+                fa_path=self.fa_path,
+                cnv_blacklist_path=self.cnv_blacklist_path,
+                interval_list_path=self.interval_list_path,
+                dest_dir_path=self.dest_dir_path, gatk=self.gatk,
+                exome=self.exome,
+                add_preprocessintervals_args=self.add_preprocessintervals_args,
+                n_cpu=self.n_cpu, memory_mb=self.memory_mb,
+                sh_config=self.sh_config
+            )
 
     def output(self):
         return luigi.LocalTarget(
@@ -234,7 +255,7 @@ class DenoiseReadCounts(SagvcTask):
         self.print_log(f'Produce denoised copy ratios:\t{run_id}')
         denoised_cr_tsv = Path(self.output()[0].path)
         standardized_cr_tsv = Path(self.output()[1].path)
-        fa_dict = Path(self.fa_dict_path)
+        fa_dict = Path(self.fa_dict_path).resolve()
         run_dir = denoised_cr_tsv.parent
         self.setup_shell(
             run_id=run_id, commands=[self.gatk, self.r], cwd=run_dir,
@@ -277,32 +298,73 @@ class DenoiseReadCounts(SagvcTask):
             )
 
 
-@requires(DenoiseReadCounts)
 class ModelSegments(SagvcTask):
-    normal_allelic_counts_tsv_path = luigi.Parameter()
+    normal_cram_path = luigi.Parameter()
+    fa_path = luigi.Parameter()
     fa_dict_path = luigi.Parameter()
-    case_allelic_counts_tsv_path = luigi.Parameter(default='')
+    snp_interval_list_path = luigi.Parameter()
+    tumor_cram_path = luigi.Parameter(default='')
+    preproc_interval_list_path = luigi.Parameter(default='')
+    cnv_blacklist_path = luigi.Parameter(default='')
+    interval_list_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     gatk = luigi.Parameter(default='gatk')
     r = luigi.Parameter(default='R')
-    dest_dir_path = luigi.Parameter(default='.')
+    exome = luigi.BoolParameter(default=False)
     create_plots = luigi.BoolParameter(default=True)
+    add_preprocessintervals_args = luigi.ListParameter(
+        default=['--interval-merging-rule', 'OVERLAPPING_ONLY']
+    )
+    add_collectreadcounts_args = luigi.ListParameter(
+        default=['--interval-merging-rule', 'OVERLAPPING_ONLY']
+    )
+    add_denoisereadcounts_args = luigi.ListParameter(default=list())
+    add_plotdenoisedcopyratios_args = luigi.ListParameter(default=list())
     add_modelsegments_args = luigi.ListParameter(default=list())
     add_plotmodeledsegments_args = luigi.ListParameter(default=list())
+    save_memory = luigi.BoolParameter(default=False)
     n_cpu = luigi.IntParameter(default=1)
     memory_mb = luigi.FloatParameter(default=4096)
     sh_config = luigi.DictParameter(default=dict())
     priority = 30
 
+    def requires(self):
+        return [
+            DenoiseReadCounts(
+                cram_path=(self.tumor_cram_path or self.normal_cram_path),
+                fa_path=self.fa_path, fa_dict_path=self.fa_dict_path,
+                preproc_interval_list_path=self.preproc_interval_list_path,
+                cnv_blacklist_path=self.cnv_blacklist_path,
+                interval_list_path=self.interval_list_path,
+                dest_dir_path=self.dest_dir_path, gatk=self.gatk, r=self.r,
+                exome=self.exome, create_plots=self.create_plots,
+                add_preprocessintervals_args=self.add_preprocessintervals_args,
+                add_collectreadcounts_args=self.add_collectreadcounts_args,
+                add_denoisereadcounts_args=self.add_denoisereadcounts_args,
+                add_plotdenoisedcopyratios_args=(
+                    self.add_plotdenoisedcopyratios_args
+                ),
+                save_memory=self.save_memory, n_cpu=self.n_cpu,
+                memory_mb=self.memory_mb, sh_config=self.sh_config
+            ),
+            *[
+                CollectAllelicCounts(
+                    cram_path=p, fa_path=self.fa_path,
+                    snp_interval_list_path=self.snp_interval_list_path,
+                    dest_dir_path=self.dest_dir_path, gatk=self.gatk,
+                    save_memory=self.save_memory, n_cpu=self.n_cpu,
+                    memory_mb=self.memory_mb, sh_config=self.sh_config
+                ) for p in [self.tumor_cram_path, self.normal_cram_path] if p
+            ]
+        ]
+
     def output(self):
         dest_dir = Path(self.dest_dir_path).resolve()
-        output_stem = Path(
+        output_stem = (
             self.create_matched_id(
-                self.case_allelic_counts_tsv_path,
-                self.normal_allelic_counts_tsv_path
-            ) if self.case_allelic_counts_tsv_path else
-            Path(self.normal_allelic_counts_tsv_path).stem
-        ).stem
+                self.tumor_cram_path, self.normal_cram_path
+            ) if self.tumor_cram_path else Path(self.normal_cram_path).stem
+        )
         return [
             luigi.LocalTarget(dest_dir.joinpath(f'{output_stem}.{s}'))
             for s in ['cr.seg', 'hets.tsv', 'modelFinal.seg']
@@ -312,15 +374,11 @@ class ModelSegments(SagvcTask):
         output_files = [Path(o.path) for o in self.output()]
         run_id = Path(output_files[0].stem).stem
         self.print_log(f'Produce denoised copy ratios:\t{run_id}')
-        denoised_cr_tsv = Path(self.input()[0].path)
-        normal_allelic_counts_tsv = Path(
-            self.normal_allelic_counts_tsv_path
-        ).resolve()
+        denoised_cr_tsv = Path(self.input()[0][0].path)
+        normal_allelic_counts_tsv = Path(self.input()[-1].path)
         run_dir = output_files[0].parent
-        if self.case_allelic_counts_tsv_path:
-            case_allelic_counts_tsv = Path(
-                self.case_allelic_counts_tsv_path
-            ).resolve()
+        if self.tumor_cram_path:
+            case_allelic_counts_tsv = Path(self.input()[1].path)
             input_files = [
                 denoised_cr_tsv, case_allelic_counts_tsv,
                 normal_allelic_counts_tsv
@@ -372,8 +430,7 @@ class ModelSegments(SagvcTask):
             output_files_or_dirs=[*output_files, run_dir]
         )
         if self.create_plots:
-            plots_dir = run_dir.joinpath(f'{run_id}.plots')
-            fa_dict = Path(self.fa_dict_path)
+            fa_dict = Path(self.fa_dict_path).resolve()
             het_allelic_counts_tsv = output_files[1]
             modeled_segments = output_files[2]
             self.run_shell(
@@ -386,16 +443,14 @@ class ModelSegments(SagvcTask):
                     + ''.join(
                         f' {a}' for a in self.add_plotmodeledsegments_args
                     )
-                    + f' --output {plots_dir}'
+                    + f' --output {run_dir}'
                     + f' --output-prefix {run_id}'
                 ),
                 input_files_or_dirs=[
                     denoised_cr_tsv, het_allelic_counts_tsv, modeled_segments,
                     fa_dict
                 ],
-                output_files_or_dirs=[
-                    plots_dir.joinpath(f'{run_id}.modeled.png'), plots_dir
-                ]
+                output_files_or_dirs=run_dir.joinpath(f'{run_id}.modeled.png')
             )
 
 
@@ -439,139 +494,21 @@ class CallCopyRatioSegments(SagvcTask):
         )
 
 
-class CallCopyRatioSegmentsTumor(luigi.Task):
-    tumor_cram_path = luigi.Parameter()
-    normal_cram_path = luigi.Parameter()
-    fa_path = luigi.Parameter()
-    snp_interval_list_path = luigi.Parameter()
-    preproc_interval_list_path = luigi.Parameter(default='')
-    cnv_blacklist_path = luigi.Parameter(default='')
-    interval_list_path = luigi.Parameter(default='')
-    dest_dir_path = luigi.Parameter(default='.')
-    gatk = luigi.Parameter(default='gatk')
-    r = luigi.Parameter(default='R')
-    save_memory = luigi.BoolParameter(default=False)
-    n_cpu = luigi.IntParameter(default=1)
-    memory_mb = luigi.FloatParameter(default=4096)
-    sh_config = luigi.DictParameter(default=dict())
+@requires(CallCopyRatioSegments)
+class CallCopyRatioSegmentsTumor(luigi.WrapperTask):
     priority = 30
 
-    def requires(self):
-        return [
-            *[
-                CollectAllelicCounts(
-                    cram_path=p, fa_path=self.fa_path,
-                    snp_interval_list_path=self.snp_interval_list_path,
-                    dest_dir_path=self.dest_dir_path, gatk=self.gatk,
-                    save_memory=self.save_memory, n_cpu=self.n_cpu,
-                    memory_mb=self.memory_mb, sh_config=self.sh_config
-                ) for p in [self.tumor_cram_path, self.normal_cram_path]
-            ],
-            *(
-                list() if self.preproc_interval_list_path else [
-                    PreprocessIntervals(
-                        fa_path=self.fa_path,
-                        cnv_blacklist_path=self.cnv_blacklist_path,
-                        interval_list_path=self.interval_list_path,
-                        dest_dir_path=self.dest_dir_path, gatk=self.gatk,
-                        n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-                        sh_config=self.sh_config
-                    )
-                ]
-            )
-        ]
-
     def output(self):
-        dest_dir = Path(self.dest_dir_path).resolve()
-        tn_stem = self.input()[0].create_matched_id(
-            self.tumor_cram_path, self.normal_cram_path
-        )
-        return luigi.LocalTarget(dest_dir.joinpath(f'{tn_stem}.cr.called.seg'))
-
-    def run(self):
-        input_file_paths = [p for p in self.input()]
-        yield CallCopyRatioSegments(
-            cram_path=self.tumor_cram_path, fa_path=self.fa_path,
-            fa_dict_path=str(
-                Path(self.fa_path).parent.joinpath(
-                    Path(self.fa_path).stem + '.dict'
-                )
-            ),
-            case_allelic_counts_tsv_path=input_file_paths[0],
-            normal_allelic_counts_tsv_path=input_file_paths[1],
-            preproc_interval_list_path=(
-                self.preproc_interval_list_path or input_file_paths[2]
-            ),
-            dest_dir_path=self.dest_dir_path, gatk=self.gatk, r=self.r,
-            save_memory=self.save_memory, n_cpu=self.n_cpu,
-            memory_mb=self.memory_mb, sh_config=self.sh_config
-        )
+        return self.input()
 
 
-class CallCopyRatioSegmentsNormal(luigi.Task):
-    normal_cram_path = luigi.Parameter()
-    fa_path = luigi.Parameter()
-    snp_interval_list_path = luigi.Parameter()
-    preproc_interval_list_path = luigi.Parameter(default='')
-    cnv_blacklist_path = luigi.Parameter(default='')
-    interval_list_path = luigi.Parameter(default='')
-    dest_dir_path = luigi.Parameter(default='.')
-    gatk = luigi.Parameter(default='gatk')
-    r = luigi.Parameter(default='R')
-    save_memory = luigi.BoolParameter(default=False)
-    n_cpu = luigi.IntParameter(default=1)
-    memory_mb = luigi.FloatParameter(default=4096)
-    sh_config = luigi.DictParameter(default=dict())
+@requires(CallCopyRatioSegments)
+class CallCopyRatioSegmentsNormal(luigi.WrapperTask):
+    tumor_cram_path = ''
     priority = 30
 
-    def requires(self):
-        return [
-            CollectAllelicCounts(
-                cram_path=self.normal_cram_path, fa_path=self.fa_path,
-                snp_interval_list_path=self.snp_interval_list_path,
-                dest_dir_path=self.dest_dir_path, gatk=self.gatk,
-                save_memory=self.save_memory, n_cpu=self.n_cpu,
-                memory_mb=self.memory_mb, sh_config=self.sh_config
-            ),
-            *(
-                list() if self.preproc_interval_list_path else [
-                    PreprocessIntervals(
-                        fa_path=self.fa_path,
-                        cnv_blacklist_path=self.cnv_blacklist_path,
-                        interval_list_path=self.interval_list_path,
-                        dest_dir_path=self.dest_dir_path, gatk=self.gatk,
-                        n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-                        sh_config=self.sh_config
-                    )
-                ]
-            )
-        ]
-
     def output(self):
-        dest_dir = Path(self.dest_dir_path).resolve()
-        cram_stem = Path(self.normal_cram_path).stem
-        return luigi.LocalTarget(
-            dest_dir.joinpath(f'{cram_stem}.cr.called.seg')
-        )
-
-    def run(self):
-        input_file_paths = [p for p in self.input()]
-        yield CallCopyRatioSegments(
-            cram_path=self.normal_cram_path, fa_path=self.fa_path,
-            fa_dict_path=str(
-                Path(self.fa_path).parent.joinpath(
-                    Path(self.fa_path).stem + '.dict'
-                )
-            ),
-            case_allelic_counts_tsv_path='',
-            normal_allelic_counts_tsv_path=input_file_paths[0],
-            preproc_interval_list_path=(
-                self.preproc_interval_list_path or input_file_paths[1]
-            ),
-            dest_dir_path=self.dest_dir_path, gatk=self.gatk, r=self.r,
-            save_memory=self.save_memory, n_cpu=self.n_cpu,
-            memory_mb=self.memory_mb, sh_config=self.sh_config
-        )
+        return self.input()
 
 
 @requires(CallCopyRatioSegmentsTumor, CallCopyRatioSegmentsNormal)

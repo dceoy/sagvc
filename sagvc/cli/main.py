@@ -149,7 +149,7 @@ def main():
     elif args['haplotypecaller'] or args['mutect2']:
         n_worker = n_cpu
     elif args['callcopyratiosegments']:
-        n_worker = min(n_cpu, 2)
+        n_worker = min(n_cpu, 3)
     else:
         n_worker = 1
     n_cpu_per_worker = max(floor(n_cpu / n_worker), 1)
@@ -332,6 +332,9 @@ def main():
                     tumor_cram_path=args['<tumor_sam_path>'],
                     normal_cram_path=args['<normal_sam_path>'],
                     fa_path=args['<fa_path>'],
+                    fa_dict_path='.'.join([
+                        *args['<fa_path>'].split('.')[:-1], 'dict'
+                    ]),
                     snp_interval_list_path=args['--snp-interval-list'],
                     preproc_interval_list_path=args['--preproc-interval-list'],
                     dest_dir_path=args['--dest-dir'],
