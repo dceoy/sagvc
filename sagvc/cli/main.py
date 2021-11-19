@@ -338,7 +338,7 @@ def main():
                     snp_interval_list_path=args['--snp-interval-list'],
                     preproc_interval_list_path=args['--preproc-interval-list'],
                     dest_dir_path=args['--dest-dir'],
-                    gatk=fetch_executable('gatk'),
+                    gatk=fetch_executable('gatk'), r=fetch_executable('R'),
                     save_memory=(memory_mb_per_worker < 8192),
                     n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
                     sh_config=sh_config,

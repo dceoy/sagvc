@@ -15,13 +15,24 @@ $ pip install -U https://github.com/dceoy/sagvc/archive/main.tar.gz
 
 Dependent commands:
 
+- `wget`
+- `pigz`
+- `pbzip2`
 - `bgzip`
 - `tabix`
 - `samtools`
+- `bedtools`
+- `bcftools`
 - `java`
 - `gatk`
 - `python` (Python 3)
+- `python2`
 - `R`
+- `Rscript`
+- `configManta.py`
+- `delly`
+- `cnvkit.py`
+- `msisensor` (or `msisensor-pro`)
 
 Docker image
 ------------
