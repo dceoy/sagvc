@@ -64,7 +64,7 @@ class CallSomaticVariantsWithStrelka(SagvcTask):
         fa = Path(self.fa_path).resolve()
         bed = (Path(self.bed_path).resolve() if self.bed_path else None)
         manta_indel_vcf = Path(
-            self.manta_indel_vcf
+            self.manta_indel_vcf_path
             or Path(self.input()[0].path).parent.joinpath(
                 f'{run_id}/results/variants/candidateSmallIndels.vcf.gz'
             )
@@ -128,7 +128,6 @@ class CallSomaticVariantsWithStrelka(SagvcTask):
 class CallGermlineVariantsWithStrelka(SagvcTask):
     normal_cram_path = luigi.Parameter()
     fa_path = luigi.Parameter()
-    manta_indel_vcf_path = luigi.Parameter(default='')
     bed_path = luigi.Parameter(default='')
     dest_dir_path = luigi.Parameter(default='.')
     python2 = luigi.Parameter(default='python2')
