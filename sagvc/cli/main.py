@@ -23,6 +23,10 @@ Usage:
         (--biallelic-snp-vcf=<path>) (--germline-resource-vcf=<path>)
         (--tumor-sample=<name>) (--normal-sample=<name>) <fa_path>
         <tumor_sam_path> <normal_sam_path>
+    sagvc strelka [--debug|--info] [--cpus=<int>] [--skip-cleaning]
+        [--print-subprocesses] [--dest-dir=<path>] [--log-dir=<path>] [--exome]
+        [--bed=<path>] [--manta-indel-vcf=<path>] <fa_path> <tumor_sam_path>
+        <normal_sam_path>
     sagvc delly [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--log-dir=<path>]
         [--excl-bed=<path>] (--tumor-sample=<name>) (--normal-sample=<name>)
@@ -52,6 +56,7 @@ Commands:
     write-af-only-vcf       Extract and write only AF from VCF INFO
     haplotypecaller         Call germline short variants using GATK
     mutect2                 Call somatic short variants using GATK
+    strelka                 Call somatic short variants using Strelka
     delly                   Call somatic structural variants using Delly
     manta                   Call somatic structural variants using Manta
     cnvkit                  Call somatic CNVs using CNVkit
@@ -82,6 +87,8 @@ Options:
                             Specify a path to a common biallelic SNP VCF file
     --germline-resource-vcf=<path>
                             Specify a path to a germline population VCF file
+    --manta-indel-vcf=<path>
+                            Specify a path to an indel candidates VCF of Manta
     --excl-bed=<path>       Specify a path to an exclusion BED file
     --tumor-sample=<name>   Specify a tumor sample name
     --normal-sample=<name>  Specify a normal sample name
@@ -126,6 +133,7 @@ from ..task.haplotypecaller import FilterVariantTranches
 from ..task.manta import CallSomaticStructualVariantsWithManta
 from ..task.msisensor import ScoreMsiWithMsisensor
 from ..task.mutect2 import FilterMutectCalls
+from ..task.strelka import CallSomaticVariantsWithStrelka
 
 
 def main():
@@ -267,6 +275,27 @@ def main():
                     save_memory=(memory_mb_per_worker < 8192),
                     n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
                     sh_config=sh_config, scatter_count=n_worker
+                )
+            ],
+            workers=n_worker, log_level=log_level
+        )
+    elif args['strelka']:
+        build_luigi_tasks(
+            tasks=[
+                CallSomaticVariantsWithStrelka(
+                    tumor_cram_path=args['<tumor_sam_path>'],
+                    normal_cram_path=args['<normal_sam_path>'],
+                    fa_path=args['<fa_path>'], bed_path=(args['--bed'] or ''),
+                    manta_indel_vcf_path=(args['--manta-indel-vcf'] or ''),
+                    dest_dir_path=args['--dest-dir'],
+                    python2=fetch_executable('python2'),
+                    bcftools=fetch_executable('bcftools'),
+                    configurestrelkasomaticworkflowpy_path=fetch_executable(
+                        'configureStrelkaSomaticWorkflow.py'
+                    ),
+                    configmantapy_path=fetch_executable('configManta.py'),
+                    exome=args['--exome'], n_cpu=n_cpu_per_worker,
+                    memory_mb=memory_mb_per_worker, sh_config=sh_config
                 )
             ],
             workers=n_worker, log_level=log_level
