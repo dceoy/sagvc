@@ -30,7 +30,7 @@ class CallSomaticVariantsWithStrelka(SagvcTask):
     sh_config = luigi.DictParameter(default=dict())
     priority = 30
 
-    def require(self):
+    def requires(self):
         if self.manta_indel_vcf_path:
             return super().requires()
         else:
@@ -63,17 +63,17 @@ class CallSomaticVariantsWithStrelka(SagvcTask):
         normal_cram = Path(self.normal_cram_path).resolve()
         fa = Path(self.fa_path).resolve()
         bed = (Path(self.bed_path).resolve() if self.bed_path else None)
-        manta_indel_vcf = Path(
-            self.manta_indel_vcf_path
-            or Path(self.input()[0].path).parent.joinpath(
-                f'{run_id}/results/variants/candidateSmallIndels.vcf.gz'
+        if self.manta_indel_vcf_path:
+            manta_indel_vcf = Path(self.manta_indel_vcf_path).resolve()
+        else:
+            manta_indel_vcf = Path(self.input()[0].path).parent.joinpath(
+                f'{run_id}.manta/results/variants/candidateSmallIndels.vcf.gz'
             )
-        ).resolve()
         config_script = Path(
             self.configurestrelkasomaticworkflowpy_path
         ).resolve()
         dest_dir = output_vcf.parent
-        run_dir = dest_dir.joinpath(run_id)
+        run_dir = dest_dir.joinpath(f'{run_id}.strelka')
         run_script = run_dir.joinpath('runWorkflow.py')
         result_files = [
             run_dir.joinpath(f'results/variants/somatic.{v}.vcf.gz{s}')
@@ -96,12 +96,13 @@ class CallSomaticVariantsWithStrelka(SagvcTask):
                 + f' --normalBam={normal_cram}'
                 + f' --referenceFasta={fa}'
                 + f' --indelCandidates={manta_indel_vcf}'
-                + f' --callRegions={bed}'
+                + (f' --callRegions={bed}' if bed else '')
                 + f' --runDir={run_dir}'
                 + (' --exome' if self.exome else '')
             ),
             input_files_or_dirs=[
-                tumor_cram, normal_cram, fa, manta_indel_vcf, bed
+                tumor_cram, normal_cram, fa, manta_indel_vcf,
+                *([bed] if self.bed_path else list())
             ],
             output_files_or_dirs=[run_script, run_dir]
         )
@@ -111,7 +112,8 @@ class CallSomaticVariantsWithStrelka(SagvcTask):
                 + f' --jobs={self.n_cpu} --memGb={memory_gb}'
             ),
             input_files_or_dirs=[
-                run_script, tumor_cram, normal_cram, fa, manta_indel_vcf, bed
+                run_script, tumor_cram, normal_cram, fa, manta_indel_vcf,
+                *([bed] if self.bed_path else list())
             ],
             output_files_or_dirs=[*result_files, run_dir]
         )
@@ -163,7 +165,7 @@ class CallGermlineVariantsWithStrelka(SagvcTask):
             self.configurestrelkagermlineworkflowpy_path
         ).resolve()
         dest_dir = output_links[0].parent
-        run_dir = dest_dir.joinpath(run_id)
+        run_dir = dest_dir.joinpath(f'{run_id}.strelka')
         run_script = run_dir.joinpath('runWorkflow.py')
         result_files = [
             run_dir.joinpath(f'results/variants/{v}.vcf.gz{s}')
@@ -183,11 +185,13 @@ class CallGermlineVariantsWithStrelka(SagvcTask):
                 f'set -e && {self.python2} {config_script}'
                 + f' --bam={normal_cram}'
                 + f' --referenceFasta={fa}'
-                + f' --callRegions={bed}'
+                + (f' --callRegions={bed}' if bed else '')
                 + f' --runDir={run_dir}'
                 + (' --exome' if self.exome else '')
             ),
-            input_files_or_dirs=[normal_cram, fa, bed],
+            input_files_or_dirs=[
+                normal_cram, fa, *([bed] if self.bed_path else list())
+            ],
             output_files_or_dirs=[run_script, run_dir]
         )
         self.run_shell(
@@ -195,7 +199,10 @@ class CallGermlineVariantsWithStrelka(SagvcTask):
                 f'set -e && {self.python2} {run_script} --mode=local'
                 + f' --jobs={self.n_cpu} --memGb={memory_gb}'
             ),
-            input_files_or_dirs=[run_script, normal_cram, fa, bed],
+            input_files_or_dirs=[
+                run_script, normal_cram, fa,
+                *([bed] if self.bed_path else list())
+            ],
             output_files_or_dirs=[*result_files, run_dir]
         )
         for o in output_links:

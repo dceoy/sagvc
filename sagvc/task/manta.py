@@ -45,7 +45,7 @@ class CallSomaticStructualVariantsWithManta(SagvcTask):
         bed = (Path(self.bed_path).resolve() if self.bed_path else None)
         config_script = Path(self.configmantapy_path).resolve()
         dest_dir = output_links[0].parent
-        run_dir = dest_dir.joinpath(run_id)
+        run_dir = dest_dir.joinpath(f'{run_id}.manta')
         run_script = run_dir.joinpath('runWorkflow.py')
         result_files = [
             run_dir.joinpath(f'results/variants/{v}.vcf.gz{s}')
@@ -131,7 +131,7 @@ class CallGermlineStructualVariantsWithManta(SagvcTask):
         bed = (Path(self.bed_path).resolve() if self.bed_path else None)
         config_script = Path(self.configmantapy_path).resolve()
         dest_dir = output_links[0].parent
-        run_dir = dest_dir.joinpath(run_id)
+        run_dir = dest_dir.joinpath(f'{run_id}.manta')
         run_script = run_dir.joinpath('runWorkflow.py')
         result_files = [
             run_dir.joinpath(f'results/variants/{v}.vcf.gz{s}')
