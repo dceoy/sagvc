@@ -61,7 +61,7 @@ class CallSomaticStructualVariantsWithManta(SagvcTask):
             config_script.parent.parent.joinpath('lib/python'),
             (os.getenv('PYTHONPATH') or '')
         )
-        memory_gb = max(floor(self.memory_mb / 1024), 4)
+        memory_gb = floor(self.memory_mb / 1024)
         self.setup_shell(
             run_id=run_id, commands=[self.python2, config_script],
             cwd=run_dir, **self.sh_config, env={'PYTHONPATH': pythonpath}
@@ -144,7 +144,7 @@ class CallGermlineStructualVariantsWithManta(SagvcTask):
             config_script.parent.parent.joinpath('lib/python'),
             (os.getenv('PYTHONPATH') or '')
         )
-        memory_gb = max(floor(self.memory_mb / 1024), 4)
+        memory_gb = floor(self.memory_mb / 1024)
         self.setup_shell(
             run_id=run_id, commands=[self.python2, config_script],
             cwd=run_dir, **self.sh_config, env={'PYTHONPATH': pythonpath}
