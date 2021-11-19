@@ -24,3 +24,6 @@ jobs:
       - name: Validate the codes using flake8
         run: |
           find . -type f -name '*.py' | xargs flake8
+      - name: Test a command
+        run: |
+          sagvc --version
