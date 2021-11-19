@@ -39,8 +39,7 @@ class CallSomaticStructualVariantsWithDelly(SagvcTask):
 
     def run(self):
         output_vcf = Path(self.output()[0].path)
-        run_dir = output_vcf.parent
-        run_id = run_dir.name
+        run_id = '.'.join(output_vcf.name.split('.')[:-4])
         self.print_log(f'Call somatic SVs with Delly:\t{run_id}')
         input_crams = [
             Path(p).resolve()
@@ -50,11 +49,12 @@ class CallSomaticStructualVariantsWithDelly(SagvcTask):
         excl_bed = (
             Path(self.excl_bed_path).resolve() if self.excl_bed_path else None
         )
+        dest_dir = output_vcf.parent
         raw_bcf = Path(self.output()[4].path)
         filtered_bcf = Path(self.output()[2].path)
-        samples_tsv = run_dir.joinpath(f'{raw_bcf.stem}.tsv')
+        samples_tsv = dest_dir.joinpath(f'{raw_bcf.stem}.tsv')
         self.setup_shell(
-            run_id=run_id, commands=[self.delly, self.bcftools], cwd=run_dir,
+            run_id=run_id, commands=[self.delly, self.bcftools], cwd=dest_dir,
             **self.sh_config, env={'OMP_NUM_THREADS': str(self.n_cpu)}
         )
         self.run_shell(
@@ -70,7 +70,7 @@ class CallSomaticStructualVariantsWithDelly(SagvcTask):
                 *input_crams, fa,
                 *([excl_bed] if self.excl_bed_path else list())
             ],
-            output_files_or_dirs=[raw_bcf, f'{raw_bcf}.csi', run_dir]
+            output_files_or_dirs=[raw_bcf, f'{raw_bcf}.csi']
         )
         self.run_shell(
             args=(
@@ -124,17 +124,17 @@ class CallGermlineStructualVariantsWithDelly(SagvcTask):
 
     def run(self):
         output_vcf = Path(self.output()[0].path)
-        run_dir = output_vcf.parent
-        run_id = run_dir.name
+        run_id = '.'.join(output_vcf.name.split('.')[:-3])
         self.print_log(f'Call germline SVs with Delly:\t{run_id}')
         input_cram = Path(self.normal_cram_path).resolve()
         fa = Path(self.fa_path).resolve()
         excl_bed = (
             Path(self.excl_bed_path).resolve() if self.excl_bed_path else None
         )
+        dest_dir = output_vcf.parent
         raw_bcf = Path(self.output()[2].path)
         self.setup_shell(
-            run_id=run_id, commands=[self.delly, self.bcftools], cwd=run_dir,
+            run_id=run_id, commands=[self.delly, self.bcftools], cwd=dest_dir,
             **self.sh_config, env={'OMP_NUM_THREADS': str(self.n_cpu)}
         )
         self.run_shell(
@@ -149,7 +149,7 @@ class CallGermlineStructualVariantsWithDelly(SagvcTask):
             input_files_or_dirs=[
                 input_cram, fa, *([excl_bed] if self.excl_bed_path else list())
             ],
-            output_files_or_dirs=[raw_bcf, f'{raw_bcf}.csi', run_dir]
+            output_files_or_dirs=[raw_bcf, f'{raw_bcf}.csi']
         )
         self.bcftools_sort(
             input_vcf_path=raw_bcf, output_vcf_path=output_vcf,

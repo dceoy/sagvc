@@ -123,14 +123,14 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
             if self.refflat_txt_path else None
         )
         output_files = [Path(o.path) for o in self.output()]
-        run_dir = output_files[0].parent
-        output_ref_cnn = run_dir.joinpath(f'{normal_cram.stem}.reference.cnn')
+        dest_dir = output_files[0].parent
+        output_ref_cnn = dest_dir.joinpath(f'{normal_cram.stem}.reference.cnn')
         output_call_cns = output_files[2]
         output_cns = output_files[3]
         self.setup_shell(
             run_id=run_id,
-            commands=[self.cnvkitpy, self.samtools, self.rscript], cwd=run_dir,
-            **self.sh_config
+            commands=[self.cnvkitpy, self.samtools, self.rscript],
+            cwd=dest_dir, **self.sh_config
         )
         self.run_shell(
             args=(
@@ -139,7 +139,7 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
                 + f' --fasta={fa}'
                 + (f' --access={access_bed}' if access_bed else '')
                 + (f' --annotate={refflat_txt}' if refflat_txt else '')
-                + f' --output-dir={run_dir}'
+                + f' --output-dir={dest_dir}'
                 + f' --output-reference={output_ref_cnn}'
                 + f' --processes={self.n_cpu}'
                 + ''.join(f' {a}' for a in self.add_batch_args)
@@ -151,11 +151,11 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
                 *[f for f in [access_bed, refflat_txt] if f]
             ],
             output_files_or_dirs=[
-                *[f for f in output_files[2:] if f.suffix != '.pdf'], run_dir
+                f for f in output_files[2:] if f.suffix != '.pdf'
             ]
         )
         for o in [output_call_cns, output_cns]:
-            output_seg = run_dir.joinpath(f'{o.stem}.seg')
+            output_seg = dest_dir.joinpath(f'{o.stem}.seg')
             self.run_shell(
                 args=(
                     f'set -e && {self.cnvkitpy} export seg'
@@ -166,7 +166,7 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
             )
         for c in ['diagram', 'scatter']:
             if getattr(self, c):
-                graph_pdf = run_dir.joinpath(f'{output_cns.stem}.{c}.pdf')
+                graph_pdf = dest_dir.joinpath(f'{output_cns.stem}.{c}.pdf')
                 self.run_shell(
                     args=(
                         f'set -e && {self.cnvkitpy} {c}'

@@ -37,20 +37,16 @@ class CallSomaticStructualVariantsWithManta(SagvcTask):
 
     def run(self):
         output_links = [Path(o.path) for o in self.output()]
-        run_dir = output_links[0].parent
-        run_id = run_dir.name
+        run_id = '.'.join(output_links[0].name.split('.')[:-4])
         self.print_log(f'Call somatic SVs with Manta:\t{run_id}')
         tumor_cram = Path(self.tumor_cram_path).resolve()
         normal_cram = Path(self.normal_cram_path).resolve()
         fa = Path(self.fa_path).resolve()
         bed = (Path(self.bed_path).resolve() if self.bed_path else None)
         config_script = Path(self.configmantapy_path).resolve()
+        dest_dir = output_links[0].parent
+        run_dir = dest_dir.joinpath(run_id)
         run_script = run_dir.joinpath('runWorkflow.py')
-        pythonpath = '{0}:{1}'.format(
-            config_script.parent.parent.joinpath('lib/python'),
-            (os.getenv('PYTHONPATH') or '')
-        )
-        memory_gb = max(floor(self.memory_mb / 1024), 4)
         result_files = [
             run_dir.joinpath(f'results/variants/{v}.vcf.gz{s}')
             for v, s in product(
@@ -61,9 +57,14 @@ class CallSomaticStructualVariantsWithManta(SagvcTask):
                 ['', '.tbi']
             )
         ]
+        pythonpath = '{0}:{1}'.format(
+            config_script.parent.parent.joinpath('lib/python'),
+            (os.getenv('PYTHONPATH') or '')
+        )
+        memory_gb = max(floor(self.memory_mb / 1024), 4)
         self.setup_shell(
-            run_id=run_id, commands=[self.python2, config_script], cwd=run_dir,
-            **self.sh_config, env={'PYTHONPATH': pythonpath}
+            run_id=run_id, commands=[self.python2, config_script],
+            cwd=run_dir, **self.sh_config, env={'PYTHONPATH': pythonpath}
         )
         self.run_shell(
             args=(
@@ -95,7 +96,7 @@ class CallSomaticStructualVariantsWithManta(SagvcTask):
         for o in output_links:
             f = run_dir.joinpath('results/variants').joinpath(
                 o.name.split('.manta.')[-1]
-            ).relative_to(run_dir)
+            ).relative_to(dest_dir)
             self.run_shell(args=f'ln -s {f} {o}', output_files_or_dirs=o)
 
 
@@ -123,19 +124,15 @@ class CallGermlineStructualVariantsWithManta(SagvcTask):
 
     def run(self):
         output_links = [Path(o.path) for o in self.output()]
-        run_dir = output_links[0].parent
-        run_id = run_dir.name
+        run_id = '.'.join(output_links[0].name.split('.')[:-4])
         self.print_log(f'Call germline SVs with Manta:\t{run_id}')
         normal_cram = Path(self.normal_cram_path).resolve()
         fa = Path(self.fa_path).resolve()
         bed = (Path(self.bed_path).resolve() if self.bed_path else None)
         config_script = Path(self.configmantapy_path).resolve()
+        dest_dir = output_links[0].parent
+        run_dir = dest_dir.joinpath(run_id)
         run_script = run_dir.joinpath('runWorkflow.py')
-        pythonpath = '{0}:{1}'.format(
-            config_script.parent.parent.joinpath('lib/python'),
-            (os.getenv('PYTHONPATH') or '')
-        )
-        memory_gb = max(floor(self.memory_mb / 1024), 4)
         result_files = [
             run_dir.joinpath(f'results/variants/{v}.vcf.gz{s}')
             for v, s in product(
@@ -143,9 +140,14 @@ class CallGermlineStructualVariantsWithManta(SagvcTask):
                 ['', '.tbi']
             )
         ]
+        pythonpath = '{0}:{1}'.format(
+            config_script.parent.parent.joinpath('lib/python'),
+            (os.getenv('PYTHONPATH') or '')
+        )
+        memory_gb = max(floor(self.memory_mb / 1024), 4)
         self.setup_shell(
-            run_id=run_id, commands=[self.python2, config_script], cwd=run_dir,
-            **self.sh_config, env={'PYTHONPATH': pythonpath}
+            run_id=run_id, commands=[self.python2, config_script],
+            cwd=run_dir, **self.sh_config, env={'PYTHONPATH': pythonpath}
         )
         self.run_shell(
             args=(
@@ -175,7 +177,7 @@ class CallGermlineStructualVariantsWithManta(SagvcTask):
         for o in output_links:
             f = run_dir.joinpath('results/variants').joinpath(
                 o.name.split('.manta.')[-1]
-            ).relative_to(run_dir)
+            ).relative_to(dest_dir)
             self.run_shell(args=f'ln -s {f} {o}', output_files_or_dirs=o)
 
 

@@ -256,9 +256,9 @@ class DenoiseReadCounts(SagvcTask):
         denoised_cr_tsv = Path(self.output()[0].path)
         standardized_cr_tsv = Path(self.output()[1].path)
         fa_dict = Path(self.fa_dict_path).resolve()
-        run_dir = denoised_cr_tsv.parent
+        dest_dir = denoised_cr_tsv.parent
         self.setup_shell(
-            run_id=run_id, commands=[self.gatk, self.r], cwd=run_dir,
+            run_id=run_id, commands=[self.gatk, self.r], cwd=dest_dir,
             **self.sh_config,
             env={
                 'JAVA_TOOL_OPTIONS': self.generate_gatk_java_options(
@@ -287,14 +287,16 @@ class DenoiseReadCounts(SagvcTask):
                     + ''.join(
                         f' {a}' for a in self.add_plotdenoisedcopyratios_args
                     )
-                    + f' --output {run_dir}'
+                    + f' --output {dest_dir}'
                     + f' --output-prefix {run_id}'
 
                 ),
                 input_files_or_dirs=[
                     standardized_cr_tsv, denoised_cr_tsv, fa_dict
                 ],
-                output_files_or_dirs=run_dir.joinpath(f'{run_id}.denoised.png')
+                output_files_or_dirs=dest_dir.joinpath(
+                    f'{run_id}.denoised.png'
+                )
             )
 
 
@@ -376,7 +378,7 @@ class ModelSegments(SagvcTask):
         self.print_log(f'Produce denoised copy ratios:\t{run_id}')
         denoised_cr_tsv = Path(self.input()[0][0].path)
         normal_allelic_counts_tsv = Path(self.input()[-1].path)
-        run_dir = output_files[0].parent
+        dest_dir = output_files[0].parent
         if self.tumor_cram_path:
             case_allelic_counts_tsv = Path(self.input()[1].path)
             input_files = [
@@ -410,7 +412,7 @@ class ModelSegments(SagvcTask):
                 )
             ]
         self.setup_shell(
-            run_id=run_id, commands=[self.gatk, self.r], cwd=run_dir,
+            run_id=run_id, commands=[self.gatk, self.r], cwd=dest_dir,
             **self.sh_config,
             env={
                 'JAVA_TOOL_OPTIONS': self.generate_gatk_java_options(
@@ -423,11 +425,11 @@ class ModelSegments(SagvcTask):
                 f'set -e && {self.gatk} ModelSegments'
                 + f' --denoised-copy-ratios {denoised_cr_tsv}'
                 + ''.join(f' {a}' for a in add_modelsegments_args)
-                + f' --output {run_dir}'
+                + f' --output {dest_dir}'
                 + f' --output-prefix {run_id}'
             ),
             input_files_or_dirs=input_files,
-            output_files_or_dirs=[*output_files, run_dir]
+            output_files_or_dirs=output_files
         )
         if self.create_plots:
             fa_dict = Path(self.fa_dict_path).resolve()
@@ -443,14 +445,14 @@ class ModelSegments(SagvcTask):
                     + ''.join(
                         f' {a}' for a in self.add_plotmodeledsegments_args
                     )
-                    + f' --output {run_dir}'
+                    + f' --output {dest_dir}'
                     + f' --output-prefix {run_id}'
                 ),
                 input_files_or_dirs=[
                     denoised_cr_tsv, het_allelic_counts_tsv, modeled_segments,
                     fa_dict
                 ],
-                output_files_or_dirs=run_dir.joinpath(f'{run_id}.modeled.png')
+                output_files_or_dirs=dest_dir.joinpath(f'{run_id}.modeled.png')
             )
 
 

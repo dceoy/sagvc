@@ -84,7 +84,7 @@ class ScoreMsiWithMsisensor(SagvcTask):
 
     def run(self):
         output_files = [Path(i.path) for i in self.output()]
-        run_dir = output_files[0].parent
+        dest_dir = output_files[0].parent
         crams = [
             Path(p).resolve()
             for p in [self.tumor_cram_path, self.normal_cram_path]
@@ -92,7 +92,7 @@ class ScoreMsiWithMsisensor(SagvcTask):
         input_targets = yield [
             SamtoolsView(
                 input_sam_path=str(c),
-                output_sam_path=str(run_dir.joinpath(f'{c.stem}.bam')),
+                output_sam_path=str(dest_dir.joinpath(f'{c.stem}.bam')),
                 fa_path=self.fa_path, samtools=self.samtools, n_cpu=self.n_cpu,
                 remove_input=False, index_sam=True, sh_config=self.sh_config
             ) for c in crams
@@ -105,7 +105,7 @@ class ScoreMsiWithMsisensor(SagvcTask):
         ).resolve()
         bed = (Path(self.bed_path).resolve() if self.bed_path else None)
         self.setup_shell(
-            run_id=run_id, commands=self.msisensor, cwd=run_dir,
+            run_id=run_id, commands=self.msisensor, cwd=dest_dir,
             **self.sh_config
         )
         self.run_shell(
@@ -118,7 +118,7 @@ class ScoreMsiWithMsisensor(SagvcTask):
                 + f' -t {bams[0]} -n {bams[1]}'
             ),
             input_files_or_dirs=[*bams, ms_tsv, *([bed] if bed else list())],
-            output_files_or_dirs=[*output_files, run_dir]
+            output_files_or_dirs=output_files
         )
         for c, t in zip(crams, input_targets):
             if str(c) != t[0].path:

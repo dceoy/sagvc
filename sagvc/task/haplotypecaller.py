@@ -149,10 +149,9 @@ class HaplotypeCaller(SagvcTask):
         interval_list = Path(self.interval_list_path).resolve()
         output_files = [Path(o.path) for o in self.output()]
         output_vcf = output_files[0]
-        run_dir = output_vcf.parent
         self.setup_shell(
             run_id='.'.join(output_vcf.name.split('.')[:-2]),
-            commands=self.gatk, cwd=run_dir, **self.sh_config,
+            commands=self.gatk, cwd=output_vcf.parent, **self.sh_config,
             env={
                 'JAVA_TOOL_OPTIONS': self.generate_gatk_java_options(
                     n_cpu=self.n_cpu, memory_mb=self.memory_mb
@@ -185,7 +184,7 @@ class HaplotypeCaller(SagvcTask):
                 input_cram, f'{input_cram}.crai', fa, interval_list,
                 *([dbsnp_vcf] if dbsnp_vcf else list())
             ],
-            output_files_or_dirs=[*output_files, run_dir]
+            output_files_or_dirs=output_files
         )
 
 

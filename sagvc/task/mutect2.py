@@ -319,10 +319,9 @@ class Mutect2(SagvcTask):
         interval_list = Path(self.interval_list_path).resolve()
         output_files = [Path(o.path) for o in self.output()]
         output_vcf = output_files[0]
-        run_dir = output_vcf.parent
         self.setup_shell(
             run_id='.'.join(output_vcf.name.split('.')[:-2]),
-            commands=self.gatk, cwd=run_dir, **self.sh_config,
+            commands=self.gatk, cwd=output_vcf.parent, **self.sh_config,
             env={
                 'JAVA_TOOL_OPTIONS': self.generate_gatk_java_options(
                     n_cpu=self.n_cpu, memory_mb=self.memory_mb
@@ -360,7 +359,7 @@ class Mutect2(SagvcTask):
                 *input_crams, fa, interval_list,
                 *([germline_resource_vcf] if germline_resource_vcf else list())
             ],
-            output_files_or_dirs=[*output_files, run_dir]
+            output_files_or_dirs=output_files
         )
 
 
