@@ -150,6 +150,7 @@ class DownloadAndProcessRegionFiles(luigi.Task):
 
     def output(self):
         fa = Path(self.input()[0][0].path)
+        cnv_blacklist = Path(self.input()[1][0].path)
         return (
             self.input()[0] + self.input()[1] + [
                 luigi.LocalTarget(fa.parent.joinpath(n)) for n in [
@@ -159,8 +160,12 @@ class DownloadAndProcessRegionFiles(luigi.Task):
                     f'{fa.stem}.wgs.excl.bed.gz',
                     f'{fa.stem}.wgs.excl.bed.gz.tbi',
                     f'{fa.stem}.wgs.excl.bed', f'{fa.stem}.access.bed',
-                    f'{fa.stem}.preprocessed.wgs.interval_list',
-                    f'{fa.stem}.preprocessed.wxs.interval_list',
+                    *[
+                        (
+                            f'{fa.stem}.excl.{cnv_blacklist.stem}.w{r}s'
+                            + '.preproc.interval_list'
+                        ) for r in ['x', 'g']
+                    ],
                     f'{fa.stem}.microsatellites.tsv'
                 ]
             ]

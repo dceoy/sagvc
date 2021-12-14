@@ -34,7 +34,7 @@ RUN set -e \
       && /opt/conda/bin/python3 /tmp/get-pip.py \
       && /opt/conda/bin/python3 -m pip install -U --no-cache-dir \
         cnvkit cutadapt https://github.com/dceoy/ftarc/archive/main.tar.gz \
-        https://github.com/dceoy/vanqc/archive/main.tar.gz /tmp/sagvc \
+        /tmp/sagvc \
       && /opt/conda/bin/conda update -n base -c defaults conda \
       && echo >> /opt/gatk/gatkcondaenv.yml \
       && echo -e '# CNVkit' >> /opt/gatk/gatkcondaenv.yml \
