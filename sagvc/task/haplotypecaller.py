@@ -65,7 +65,7 @@ class CallVariantsWithHaplotypeCaller(SagvcTask):
                 gatk=self.gatk, max_mnp_distance=self.max_mnp_distance,
                 add_haplotypecaller_args=self.add_haplotypecaller_args,
                 save_memory=self.save_memory, n_cpu=self.n_cpu,
-                memory_mb=self.memory_mb, sh_config=self.sh_config
+                memory_mb=int(self.memory_mb / 2), sh_config=self.sh_config
             ) for o, s in zip(interval_lists, tmp_prefixes)
         ]
         run_id = '.'.join(output_vcf.name.split('.')[:-3])
@@ -229,7 +229,7 @@ class ScoreVariantsWithCnn(SagvcTask):
                 gatk=self.gatk, python=self.python,
                 add_cnnscorevariants_args=self.add_cnnscorevariants_args,
                 save_memory=self.save_memory, n_cpu=self.n_cpu,
-                memory_mb=self.memory_mb, sh_config=self.sh_config
+                memory_mb=int(self.memory_mb / 2), sh_config=self.sh_config
             ) for o, s in zip(interval_lists, tmp_prefixes)
         ]
         run_id = '.'.join(output_vcf.name.split('.')[:-2])
