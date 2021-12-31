@@ -14,15 +14,15 @@ Usage:
         [--log-dir=<path>]
     sagvc haplotypecaller [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--log-dir=<path>]
-        [--max-mnp-distance=<int>] [--interval-list=<path>]
-        [--dbsnp-vcf=<path>] (--resource-vcf=<path>)... <fa_path>
-        <normal_sam_path>
+        [--scatter-count=<int>] [--max-mnp-distance=<int>]
+        [--interval-list=<path>] [--dbsnp-vcf=<path>]
+        (--resource-vcf=<path>)... <fa_path> <normal_sam_path>
     sagvc mutect2 [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--log-dir=<path>]
-        [--max-mnp-distance=<int>] [--interval-list=<path>]
-        (--biallelic-snp-vcf=<path>) (--germline-resource-vcf=<path>)
-        (--tumor-sample=<name>) (--normal-sample=<name>) <fa_path>
-        <tumor_sam_path> <normal_sam_path>
+        [--scatter-count=<int>] [--max-mnp-distance=<int>]
+        [--interval-list=<path>] (--biallelic-snp-vcf=<path>)
+        (--germline-resource-vcf=<path>) (--tumor-sample=<name>)
+        (--normal-sample=<name>) <fa_path> <tumor_sam_path> <normal_sam_path>
     sagvc strelka [--debug|--info] [--cpus=<int>] [--skip-cleaning]
         [--print-subprocesses] [--dest-dir=<path>] [--log-dir=<path>] [--exome]
         [--bed=<path>] [--manta-indel-vcf=<path>] <fa_path> <tumor_sam_path>
@@ -78,6 +78,7 @@ Options:
     --cnv-blacklist=<path>  Specify a path to a CNV blacklist file for GATK
     --src-path=<path>       Specify a source file path
     --src-url=<url>         Specify a source URL
+    --scatter-count=<int>   Specify a scatter count
     --max-mnp-distance=<int>
                             Specify the max MNP distance [default: 1]
     --interval-list=<path>  Specify a path to an interval_list file
@@ -164,6 +165,10 @@ def main():
     memory_mb_per_worker = ceil(
         virtual_memory().total / 1024 / 1024 / 2 / n_worker
     )
+    if args['haplotypecaller'] or args['mutect2']:
+        scatter_count = int(args['--scatter-count'] or n_worker)
+    else:
+        scatter_count = 1
     print_yml([
         {'n_worker': n_worker}, {'n_cpu_per_worker': n_cpu_per_worker},
         {'memory_mb_per_worker': memory_mb_per_worker}
@@ -251,7 +256,7 @@ def main():
                     max_mnp_distance=int(args['--max-mnp-distance']),
                     save_memory=(memory_mb_per_worker < 8192),
                     n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
-                    sh_config=sh_config, scatter_count=n_worker
+                    sh_config=sh_config, scatter_count=scatter_count
                 )
             ],
             workers=n_worker, log_level=log_level
@@ -274,7 +279,7 @@ def main():
                     max_mnp_distance=int(args['--max-mnp-distance']),
                     save_memory=(memory_mb_per_worker < 8192),
                     n_cpu=n_cpu_per_worker, memory_mb=memory_mb_per_worker,
-                    sh_config=sh_config, scatter_count=n_worker
+                    sh_config=sh_config, scatter_count=scatter_count
                 )
             ],
             workers=n_worker, log_level=log_level
