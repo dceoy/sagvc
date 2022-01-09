@@ -51,13 +51,8 @@ class SagvcTask(ShellTask):
             '-Dsamjdk.use_async_io_read_samtools=true',
             '-Dsamjdk.use_async_io_write_samtools=true',
             '-Dsamjdk.use_async_io_write_tribble=false',
-            '-Xmx{}m'.format(int(memory_mb)),
-            *(
-                [
-                    '-XX:+UseParallelGC',
-                    '-XX:ParallelGCThreads={}'.format(int(n_cpu))
-                ] if n_cpu > 1 else list()
-            )
+            '-Xmx{}m'.format(int(memory_mb)), '-XX:+UseParallelGC',
+            '-XX:ParallelGCThreads={}'.format(int(n_cpu))
         ])
 
     @classmethod

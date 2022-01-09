@@ -153,10 +153,11 @@ def main():
     logger.debug(f'args:{os.linesep}{args}')
     print_log(f'Start the workflow of sagvc {__version__}')
     n_cpu = int(args['--cpus'] or cpu_count())
+    scatter_count = int(args['--scatter-count'] or 1)
     if args['download'] or args['target']:
         n_worker = int(args['--workers'])
     elif args['haplotypecaller'] or args['mutect2']:
-        n_worker = n_cpu
+        n_worker = max(min(floor(n_cpu / 3), scatter_count), 1)
     elif args['callcopyratiosegments']:
         n_worker = min(n_cpu, 3)
     else:
@@ -165,10 +166,6 @@ def main():
     memory_mb_per_worker = ceil(
         virtual_memory().total / 1024 / 1024 / 2 / n_worker
     )
-    if args['haplotypecaller'] or args['mutect2']:
-        scatter_count = int(args['--scatter-count'] or n_worker)
-    else:
-        scatter_count = 1
     print_yml([
         {'n_worker': n_worker}, {'n_cpu_per_worker': n_cpu_per_worker},
         {'memory_mb_per_worker': memory_mb_per_worker}
