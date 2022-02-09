@@ -92,10 +92,11 @@ class CallSomaticStructualVariantsWithDelly(SagvcTask):
             input_files_or_dirs=[raw_bcf, samples_tsv],
             output_files_or_dirs=[filtered_bcf, f'{filtered_bcf}.csi']
         )
-        self.bcftools_sort(
+        self.bcftools_view(
             input_vcf_path=filtered_bcf, output_vcf_path=output_vcf,
-            bcftools=self.bcftools, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-            index_vcf=True, remove_input=False
+            bcftools=self.bcftools,
+            samples=f'{self.normal_sample_name},{self.tumor_sample_name}',
+            n_cpu=self.n_cpu, index_vcf=True, remove_input=False
         )
 
 
@@ -151,10 +152,10 @@ class CallGermlineStructualVariantsWithDelly(SagvcTask):
             ],
             output_files_or_dirs=[raw_bcf, f'{raw_bcf}.csi']
         )
-        self.bcftools_sort(
+        self.bcftools_view(
             input_vcf_path=raw_bcf, output_vcf_path=output_vcf,
-            bcftools=self.bcftools, n_cpu=self.n_cpu, memory_mb=self.memory_mb,
-            index_vcf=True, remove_input=False
+            bcftools=self.bcftools, n_cpu=self.n_cpu, index_vcf=True,
+            remove_input=False
         )
 
 

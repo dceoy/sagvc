@@ -157,7 +157,7 @@ class SagvcTask(ShellTask):
                 + ''.join(f' {p}' for p in input_vcf_paths)
                 + f' | {bcftools} sort --max-mem {memory_mb}M'
                 + f' --temp-dir {output_vcf_path}.sort --output-type z'
-                + f' --output-file {output_vcf_path} -'
+                + f' --output {output_vcf_path} -'
             ),
             input_files_or_dirs=input_vcf_paths,
             output_files_or_dirs=output_vcf_path
@@ -171,15 +171,15 @@ class SagvcTask(ShellTask):
             cls.remove_files_and_dirs(*input_vcf_paths)
 
     @classmethod
-    def bcftools_sort(cls, input_vcf_path, output_vcf_path,
-                      bcftools='bcftools', n_cpu=1, memory_mb=1024,
+    def bcftools_view(cls, input_vcf_path, output_vcf_path,
+                      bcftools='bcftools', samples=None, n_cpu=1,
                       index_vcf=True, remove_input=True):
         cls.run_shell(
             args=(
-                f'set -e && {bcftools} sort --max-mem {memory_mb}M'
-                + f' --temp-dir {output_vcf_path}.sort'
-                + f' --output-type z --output-file {output_vcf_path}'
-                + f' {input_vcf_path}'
+                f'set -e && {bcftools} view'
+                + (f' --samples {samples}' if samples else '')
+                + f' --threads {n_cpu} --output-type z'
+                + f' --output {output_vcf_path} {input_vcf_path}'
             ),
             input_files_or_dirs=input_vcf_path,
             output_files_or_dirs=output_vcf_path
