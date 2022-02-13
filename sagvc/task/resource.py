@@ -223,8 +223,7 @@ class CreateExclusionIntervalListBed(SagvcTask):
         self.run_shell(
             args=(
                 f'set -eo pipefail && {self.bedtools} subtract'
-                + f' -a {genome_bed} -b {input_bed}'
-                + f' | {self.bgzip} -@ {self.n_cpu} -c > {excl_bed}'
+                + f' -a {genome_bed} -b {input_bed} > {excl_bed}'
             ),
             input_files_or_dirs=[genome_bed, input_bed],
             output_files_or_dirs=excl_bed
