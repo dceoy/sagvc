@@ -82,24 +82,32 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
         tumor_stem = Path(self.tumor_cram_path).stem
         normal_stem = Path(self.normal_cram_path).stem
         access_stem = Path(self.access_bed_path or self.fa_path).stem
+        run_dir = dest_dir.joinpath(
+            self.create_matched_id(
+                self.tumor_cram_path, self.normal_cram_path
+            ) + '.cnvkit'
+        )
         return [
-            luigi.LocalTarget(dest_dir.joinpath(n)) for n in (
+            luigi.LocalTarget(p) for p in (
                 [
-                    (tumor_stem + s) for s in (
+                    dest_dir.joinpath(run_dir.name + s) for s in [
+                        '.call.cns', '.cns', '.call.seg', '.seg'
+                    ]
+                ] + [
+                    run_dir.joinpath(tumor_stem + s) for s in (
                         [
-                            '.call.seg', '.seg', '.call.cns', '.cns',
-                            '.bintest.cns', '.cnr', '.targetcoverage.cnn',
-                            '.antitargetcoverage.cnn'
+                            '.call.cns', '.cns', '.bintest.cns', '.cnr',
+                            '.targetcoverage.cnn', '.antitargetcoverage.cnn'
                         ] + (['-diagram.pdf'] if self.diagram else list())
                         + (['-scatter.pdf'] if self.scatter else list())
                     )
                 ] + [
-                    (normal_stem + s) for s in [
+                    run_dir.joinpath(normal_stem + s) for s in [
                         '.targetcoverage.cnn', '.antitargetcoverage.cnn',
                         '.reference.cnn'
                     ]
                 ] + [
-                    (access_stem + s) for s in [
+                    run_dir.joinpath(access_stem + s) for s in [
                         '.target.bed', '.antitarget.bed'
                     ]
                 ]
@@ -123,14 +131,15 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
             if self.refflat_txt_path else None
         )
         output_files = [Path(o.path) for o in self.output()]
-        dest_dir = output_files[0].parent
-        output_ref_cnn = dest_dir.joinpath(f'{normal_cram.stem}.reference.cnn')
-        output_call_cns = output_files[2]
-        output_cns = output_files[3]
+        run_dir = output_files[4].parent
+        output_cns = output_files[5]
+        output_cnses = output_files[4:6]
+        output_links = output_files[0:2]
+        output_ref_cnn = run_dir.joinpath(f'{normal_cram.stem}.reference.cnn')
         self.setup_shell(
             run_id=run_id,
-            commands=[self.cnvkitpy, self.samtools, self.rscript],
-            cwd=dest_dir, **self.sh_config
+            commands=[self.cnvkitpy, self.samtools, self.rscript], cwd=run_dir,
+            **self.sh_config
         )
         self.run_shell(
             args=(
@@ -139,7 +148,7 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
                 + f' --fasta={fa}'
                 + (f' --access={access_bed}' if access_bed else '')
                 + (f' --annotate={refflat_txt}' if refflat_txt else '')
-                + f' --output-dir={dest_dir}'
+                + f' --output-dir={run_dir}'
                 + f' --output-reference={output_ref_cnn}'
                 + f' --processes={self.n_cpu}'
                 + ''.join(f' {a}' for a in self.add_batch_args)
@@ -151,22 +160,12 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
                 *[f for f in [access_bed, refflat_txt] if f]
             ],
             output_files_or_dirs=[
-                f for f in output_files[2:] if f.suffix != '.pdf'
+                f for f in output_files[4:] if f.suffix != '.pdf'
             ]
         )
-        for o in [output_call_cns, output_cns]:
-            output_seg = dest_dir.joinpath(f'{o.stem}.seg')
-            self.run_shell(
-                args=(
-                    f'set -e && {self.cnvkitpy} export seg'
-                    + ''.join(f' {a}' for a in self.add_export_seg_args)
-                    + f' --output={output_seg} {o}'
-                ),
-                input_files_or_dirs=o, output_files_or_dirs=output_seg
-            )
         for c in ['diagram', 'scatter']:
             if getattr(self, c):
-                graph_pdf = dest_dir.joinpath(f'{output_cns.stem}.{c}.pdf')
+                graph_pdf = run_dir.joinpath(f'{output_cns.stem}.{c}.pdf')
                 self.run_shell(
                     args=(
                         f'set -e && {self.cnvkitpy} {c}'
@@ -178,6 +177,17 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
                     input_files_or_dirs=output_cns,
                     output_files_or_dirs=graph_pdf
                 )
+        for i, o in zip([output_cnses, output_links]):
+            output_seg = o.parent.joinpath(f'{o.stem}.seg')
+            self.run_shell(args=f'ln -s {i} {o}', output_files_or_dirs=o)
+            self.run_shell(
+                args=(
+                    f'set -e && {self.cnvkitpy} export seg'
+                    + ''.join(f' {a}' for a in self.add_export_seg_args)
+                    + f' --output={output_seg} {o}'
+                ),
+                input_files_or_dirs=o, output_files_or_dirs=output_seg
+            )
 
 
 if __name__ == '__main__':
