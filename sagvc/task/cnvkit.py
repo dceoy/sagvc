@@ -177,7 +177,7 @@ class CallSomaticCnvWithCnvkit(SagvcTask):
                     input_files_or_dirs=output_cns,
                     output_files_or_dirs=graph_pdf
                 )
-        for i, o in zip([output_cnses, output_links]):
+        for i, o in zip(output_cnses, output_links):
             output_seg = o.parent.joinpath(f'{o.stem}.seg')
             self.run_shell(args=f'ln -s {i} {o}', output_files_or_dirs=o)
             self.run_shell(
