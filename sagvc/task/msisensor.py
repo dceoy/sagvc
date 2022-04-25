@@ -112,7 +112,7 @@ class ScoreMsiWithMsisensor(SagvcTask):
             args=(
                 f'set -e && {self.msisensor} msi'
                 + f' -d {ms_tsv}'
-                + (' -e {bed}' if bed else '')
+                + (f' -e {bed}' if bed else '')
                 + ''.join(f' {a}' for a in self.add_msi_args)
                 + f' -o {output_files[0]}'
                 + f' -t {bams[0]} -n {bams[1]}'
